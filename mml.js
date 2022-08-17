@@ -64,7 +64,7 @@ function parseExpr(tokens, i) {
     }
     i = r1[0];
     const r2 = parsePrimary(tokens, i);
-    let exprR;
+    let exprR = { type: "Null" };
     if (r2 !== undefined) {
       i = r2[0];
       exprR = r2[1];
@@ -196,7 +196,7 @@ const code = `
   0 and (()print(10));
   1 and (()print(11));
   1 then (
-    ()print(12)
+    ()print(12);
   );
   a = 5;
   ()print(()$a);
@@ -204,10 +204,10 @@ const code = `
   ()print(()$a);
   fn = (() => (
     ()print(()$args.0);
-    ()print(()$args.1)
+    ()print(()$args.1);
   ));
   (1)fn(2);
-  (3)fn(4)
+  (3)fn(4);
 `;
 console.log(code);
 tokens = tokenize(code);
