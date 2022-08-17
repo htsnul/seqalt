@@ -64,13 +64,20 @@ function parseExpr(tokens, i) {
     }
     i = r1[0];
     const r2 = parsePrimary(tokens, i);
-    i = r2[0];
-    expr = { type: "Call", name: r1[1], args: [ expr, r2[1]] };
+    let exprR;
+    if (r2 !== undefined) {
+      i = r2[0];
+      exprR = r2[1];
+    }
+    expr = { type: "Call", name: r1[1], args: [expr, exprR] };
   }
   return [i, expr];
 }
 
 function parsePrimary(tokens, i) {
+  if (i >= tokens.length) {
+    return undefined;
+  }
   const token = tokens[i];
   if (token.type === "Paren" && token.value === "(") {
     i++;
@@ -100,66 +107,16 @@ function parsePrimary(tokens, i) {
 function evalExpr(expr) {
   if (expr.type === "Call") {
     const name = evalExpr(expr.name);
-    if (name === "#") {
-      return evalExpr(expr.args[0]);
-    }
-    if (name === ";") {
-      evalExpr(expr.args[0]);
-      return evalExpr(expr.args[1]);
-    }
-    if (name === "=") {
-      const k = evalExpr(expr.args[0]);
-      const v = evalExpr(expr.args[1]);
-      environment[k] = v;
-      return v;
-    }
-    if (name === "$") {
-      evalExpr(expr.args[0]);
-      return environment[evalExpr(expr.args[1])];
-    }
-    if (name === ".") {
-      const obj = evalExpr(expr.args[0]);
-      const key = evalExpr(expr.args[1]);
-      return obj[key];
-    }
-    if (name === "=>") {
-      evalExpr(expr.args[0]);
-      return expr.args[1];
-    }
-    if (name === "+") {
-      console.log(expr.args[0]);
-      console.log(expr.args[1]);
-      return evalExpr(expr.args[0]) + evalExpr(expr.args[1]);
-    }
-    if (name === "-") {
-      return evalExpr(expr.args[0]) - evalExpr(expr.args[1]);
-    }
-    if (name === "==") {
-      return evalExpr(expr.args[0]) === evalExpr(expr.args[1]);
-    }
-    if (name === "print") {
-      console.log(evalExpr(expr.args[0]), evalExpr(expr.args[1]));
-      return undefined;
-    }
-    if (name === "and") {
-      if (e = evalExpr(expr.args[0])) {
-        return evalExpr(expr.args[1]);
-      }
-      return undefined;
-    }
-    if (name === "then") {
-      if (evalExpr(expr.args[0])) {
-        return evalExpr(expr.args[1]);
-      }
-      return undefined;
-    }
-    {
+    const f = environment[name];
+    if (typeof f === "function") {
+      return f(expr);
+    } else {
       const args = [
         evalExpr(expr.args[0]),
         evalExpr(expr.args[1])
       ];
-      environment["args"] = args;
       const f = environment[name];
+      environment["args"] = args;
       return evalExpr(f);
     }
   }
@@ -174,27 +131,83 @@ function evalExpr(expr) {
   }
 }
 
-const environment = [];
-//const code = "(3+10)-(8+4+2)print()print(3)";
+const environment = {};
+
+function addNativeFunctions() {
+  environment["+"] = (expr) => {
+    return evalExpr(expr.args[0]) + evalExpr(expr.args[1]);
+  };
+  environment["#"] = (expr) => {
+    return evalExpr(expr.args[0]);
+  };
+  environment[";"] = (expr) => {
+    evalExpr(expr.args[0]);
+    return evalExpr(expr.args[1]);
+  };
+  environment["="] = (expr) => {
+    const k = evalExpr(expr.args[0]);
+    const v = evalExpr(expr.args[1]);
+    environment[k] = v;
+    return v;
+  };
+  environment["$"] = (expr) => {
+    evalExpr(expr.args[0]);
+    return environment[evalExpr(expr.args[1])];
+  };
+  environment["."] = (expr) => {
+    const obj = evalExpr(expr.args[0]);
+    const key = evalExpr(expr.args[1]);
+    return obj[key];
+  };
+  environment["=>"] = (expr) => {
+    evalExpr(expr.args[0]);
+    return expr.args[1];
+  };
+  environment["-"] = (expr) => {
+    return evalExpr(expr.args[0]) - evalExpr(expr.args[1]);
+  };
+  environment["=="] = (expr) => {
+    return evalExpr(expr.args[0]) === evalExpr(expr.args[1]);
+  };
+  environment["print"] = (expr) => {
+    console.log(evalExpr(expr.args[0]), evalExpr(expr.args[1]));
+    return undefined;
+  };
+  environment["and"] = (expr) => {
+    if (evalExpr(expr.args[0])) {
+      return evalExpr(expr.args[1]);
+    }
+    return undefined;
+  };
+  environment["then"] = (expr) => {
+    if (evalExpr(expr.args[0])) {
+      return evalExpr(expr.args[1]);
+    }
+    return undefined;
+  };
+}
+
+addNativeFunctions();
+
 const code = `
-()print((3 + 10) - (8 + 4 + 2));
-()print(3);
-()print(3 == 3);
-0 and (()print(10));
-1 and (()print(11));
-1 then (
-  ()print(12)
-);
-a = 5;
-()print(()$a);
-a = (()$a + 3);
-()print(()$a);
-fn = (() => (
-  ()print(()$args.0);
-  ()print(()$args.1)
-));
-(1)fn(2);
-(3)fn(4)
+  ()print((3 + 10) - (8 + 4 + 2));
+  ()print(3);
+  ()print(3 == 3);
+  0 and (()print(10));
+  1 and (()print(11));
+  1 then (
+    ()print(12)
+  );
+  a = 5;
+  ()print(()$a);
+  a = (()$a + 3);
+  ()print(()$a);
+  fn = (() => (
+    ()print(()$args.0);
+    ()print(()$args.1)
+  ));
+  (1)fn(2);
+  (3)fn(4)
 `;
 console.log(code);
 tokens = tokenize(code);
