@@ -36,12 +36,12 @@ function tokenize(str) {
     } else if (isSign(str[i]) && !isParen(str[i])) {
       let e = i + 1;
       while (e < str.length && isSign(str[e]) && !isParen(str[e])) ++e;
-      tokens.push({ type: "Identifier", value: str.slice(i, e) });
+      tokens.push({ type: "String", value: str.slice(i, e) });
       i = e;
     } else if (isAlpha(str[i])) {
       let e = i + 1;
       while (e < str.length && isAlpha(str[e])) ++e;
-      tokens.push({ type: "Identifier", value: str.slice(i, e) });
+      tokens.push({ type: "String", value: str.slice(i, e) });
       i = e;
     } else {
       ++i;
@@ -90,9 +90,9 @@ function parsePrimary(tokens, i) {
     i++;
     return [i, { type: "Number", value: token.value }];
   }
-  if (token.type === "Identifier") {
+  if (token.type === "String") {
     i++;
-    return [i, { type: "Identifier", value: token.value }];
+    return [i, { type: "String", value: token.value }];
   }
   return undefined;
 }
@@ -108,13 +108,27 @@ function evalExpr(expr) {
       return evalExpr(expr.args[1]);
     }
     if (name === "=") {
+      const k = evalExpr(expr.args[0]);
       const v = evalExpr(expr.args[1]);
-      environment[evalExpr(expr.args[0])] = v;
-      //console.log("expr.args[0]", expr.args[0]);
-      //environment[expr.args[0].value] = v;
+      environment[k] = v;
       return v;
     }
+    if (name === "$") {
+      evalExpr(expr.args[0]);
+      return environment[evalExpr(expr.args[1])];
+    }
+    if (name === ".") {
+      const obj = evalExpr(expr.args[0]);
+      const key = evalExpr(expr.args[1]);
+      return obj[key];
+    }
+    if (name === "=>") {
+      evalExpr(expr.args[0]);
+      return expr.args[1];
+    }
     if (name === "+") {
+      console.log(expr.args[0]);
+      console.log(expr.args[1]);
       return evalExpr(expr.args[0]) + evalExpr(expr.args[1]);
     }
     if (name === "-") {
@@ -139,14 +153,20 @@ function evalExpr(expr) {
       }
       return undefined;
     }
+    {
+      const args = [
+        evalExpr(expr.args[0]),
+        evalExpr(expr.args[1])
+      ];
+      environment["args"] = args;
+      const f = environment[name];
+      return evalExpr(f);
+    }
   }
   if (expr.type === "Number") {
     return expr.value;
   }
-  if (expr.type === "Identifier") {
-    if (environment[expr.value] !== undefined) {
-      return environment[expr.value];
-    }
+  if (expr.type === "String") {
     return expr.value;
   }
   if (expr.type === "Null") {
@@ -160,21 +180,22 @@ const code = `
 ()print((3 + 10) - (8 + 4 + 2));
 ()print(3);
 ()print(3 == 3);
-0 and(()print(10));
-1 and(()print(11));
+0 and (()print(10));
+1 and (()print(11));
 1 then (
   ()print(12)
 );
-a=5;
-()print(a);
-a=(a+3);
-()print(a)
+a = 5;
+()print(()$a);
+a = (()$a + 3);
+()print(()$a);
+fn = (() => (
+  ()print(()$args.0);
+  ()print(()$args.1)
+));
+(1)fn(2);
+(3)fn(4)
 `;
-//3==4and print(hoge)
-//(3==4)if(()prnt(a),()print(b))
-//const code = "3+5print3;()print4";
-//const code = "(3+10)-(8+4+2)"
-//const code = "3+10-8+4+2";
 console.log(code);
 tokens = tokenize(code);
 console.log(tokens);
