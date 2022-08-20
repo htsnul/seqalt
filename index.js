@@ -1,55 +1,55 @@
 import { evalCode } from "./binop.js"
 
 const code0 = `
-  then = (() => (
-    i = 0;
-    ()$args.0 || (i = 1);
-    ()(()$args.1.(()$i))();
-  ));
-  0 then((() => (
-    ()print(aaa);
-  )), (() => (
-    ()print(bbb);
-  )));
+then = (() => (
+  i = 0;
+  ()$args.0 || (i = 1);
+  ()(()$args.1.(()$i))();
+));
+0 then((() => (
+  ()print(aaa);
+)), (() => (
+  ()print(bbb);
+)));
 `;
 
 const code1 = `
-  i = 0;
-  ary = (
-    (() => (()print(4))),
-    (() => (()print(5)))
-  );
-  ()(()$ary.0)();
+i = 0;
+ary = (
+  (() => (()print(4))),
+  (() => (()print(5)))
+);
+()(()$ary.0)();
 `;
 
 const code2 = `
-  ()print((3 + 10) - (8 + 4 + 2));
-  ()print(3);
-  ()print(3 == 3);
+()print((3 + 10) - (8 + 4 + 2));
+()print(3);
+()print(3 == 3);
 `;
 
 const code3 = `
-  0 && (()print(10));
-  1 && (()print(11));
-  1 && (
-    ()print(12);
-  );
+0 && (()print(10));
+1 && (()print(11));
+1 && (
+  ()print(12);
+);
 `;
 
 const code4 = `
-  a = 5;
-  ()print(()$a);
-  a = (()$a + 3);
-  ()print(()$a);
+a = 5;
+()print(()$a);
+a = (()$a + 3);
+()print(()$a);
 `;
 
 const code5 = `
-  fn = (() => (
-    ()print(()$args.0);
-    ()print(()$args.1);
-  ));
-  (1)fn(2);
-  (3)fn(4);
+fn = (() => (
+  ()print(()$args.0);
+  ()print(()$args.1);
+));
+(1)fn(2);
+(3)fn(4);
 `;
 
 onload = () => {
