@@ -75,6 +75,33 @@ fib = (() => (
 ()fib(9)
 `;
 
+const code8 = `
+a = ((b: 3) + (c: 4));
+()$a, b = 2;
+()print(()$a.b);
+()print(()$a.c);
+`;
+
+const code9 = `
+()print(a);
+()var a = 1;
+()(() => (
+  ()print(()$a);
+  a = 4;
+  ()print(()$a);
+))();
+()print(()$a);
+
+()print(b);
+()var b = 1;
+()(() => (
+  ()print(()$b);
+  ()var b = 4;
+  ()print(()$b);
+))();
+()print(()$b);
+`;
+
 
 onload = () => {
   document.body.innerHTML = `
@@ -84,7 +111,7 @@ onload = () => {
     <pre class="log"></pre>
     <pre class="result"></pre>
   `;
-  document.querySelector("textarea").value = code7;
+  document.querySelector("textarea").value = code9;
   globalThis.log = (str) => {
     document.querySelector(".log").innerHTML += str + "\n";
   };

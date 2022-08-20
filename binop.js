@@ -66,17 +66,17 @@ function evalCallExpr(expr) {
   const args0Val = evalExpr(expr.args[0]);
   const func = (() => {
     const f = evalExpr(expr.func);
-    if (typeof f === "string") return getEnvironmentValue(f);
+    if (typeof f === "string") return envVal(f);
     if (typeof f === "object") return f;
   })();
   if (typeof func === "function") {
     return func(args0Val, expr.args[1]);
   }
   if (typeof func === "object") {
-    environment = { parent: environment };
-    environment["args"] = [args0Val, evalExpr(expr.args[1])];
+    currentEnv = { parent: currentEnv, vars: {} };
+    currentEnv.vars["args"] = [args0Val, evalExpr(expr.args[1])];
     const r = evalExpr(func);
-    environment = environment.parent;
+    currentEnv = currentEnv.parent;
     return r;
   }
 }
@@ -88,79 +88,97 @@ function evalExpr(expr) {
   if (expr.type === "Null") return undefined;
 }
 
-let environment = {};
+const globalEnv = { vars: {} };
+let currentEnv = globalEnv;
 
-function getEnvironmentValue(name) {
-  let e = environment;
-  while (e !== undefined) {
-    const v = e[name];
-    if (v !== undefined) {
-      return v;
-    }
-    e = e.parent;
+function ownerEnvVars(name) {
+  for (let e = currentEnv; e; e = e.parent) {
+    if (e.vars[name] !== undefined) return e.vars;
   }
 }
 
+function envVal(name) { return ownerEnvVars(name)[name]; }
+
 function addNativeFunctions() {
-  environment["+"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["var"] = (arg0Val, arg1Expr) => {
+    const k = evalExpr(arg1Expr);
+    currentEnv.vars[k] = null;
+    return k;
+  };
+  globalEnv.vars["+"] = (arg0Val, arg1Expr) => {
+    if (typeof arg0Val === "object") {
+      return { ...arg0Val, ...evalExpr(arg1Expr) };
+    }
     return arg0Val + evalExpr(arg1Expr);
   };
-  environment["-"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["-"] = (arg0Val, arg1Expr) => {
     return arg0Val - evalExpr(arg1Expr);
   };
-  environment["#"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["#"] = (arg0Val, arg1Expr) => {
     return arg0Val;
   };
-  environment[";"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars[";"] = (arg0Val, arg1Expr) => {
     return evalExpr(arg1Expr);
   };
-  environment["="] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["="] = (arg0Val, arg1Expr) => {
+    if (arg0Val instanceof Array) {
+      const [vars, k] = arg0Val;
+      const v = evalExpr(arg1Expr);
+      vars[k] = v;
+      return v;
+    }
     const k = arg0Val;
     const v = evalExpr(arg1Expr);
-    environment[k] = v;
+    const vars = ownerEnvVars(k) ?? currentEnv.vars;
+    vars[k] = v;
     return v;
   };
-  environment["$"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["$"] = (arg0Val, arg1Expr) => {
     const k = evalExpr(arg1Expr);
-    const v = getEnvironmentValue(k);
+    const v = envVal(k);
     return v;
   };
-  environment["."] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["."] = (arg0Val, arg1Expr) => {
     const obj = arg0Val;
     const key = evalExpr(arg1Expr);
     return obj[key];
   };
-  environment[","] = (arg0Val, arg1Expr) => {
+  globalEnv.vars[","] = (arg0Val, arg1Expr) => {
     const arg1Val = evalExpr(arg1Expr);
     if (arg0Val instanceof Array) {
       return [...arg0Val, arg1Val];
     }
     return [arg0Val, arg1Val];
   };
-  environment["=>"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["=>"] = (arg0Val, arg1Expr) => {
     return arg1Expr;
   };
-  environment["=="] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["=="] = (arg0Val, arg1Expr) => {
     return arg0Val === evalExpr(arg1Expr);
   };
-  environment["<"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["<"] = (arg0Val, arg1Expr) => {
     return arg0Val < evalExpr(arg1Expr);
   };
-  environment["print"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["print"] = (arg0Val, arg1Expr) => {
     log(arg0Val ?? evalExpr(arg1Expr));
     return undefined;
   };
-  environment["&&"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["&&"] = (arg0Val, arg1Expr) => {
     return arg0Val && evalExpr(arg1Expr);
   };
-  environment["||"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["||"] = (arg0Val, arg1Expr) => {
     return arg0Val || evalExpr(arg1Expr);
   };
-  environment["?"] = (arg0Val, arg1Expr) => {
+  globalEnv.vars["?"] = (arg0Val, arg1Expr) => {
     return arg0Val && { value: evalExpr(arg1Expr) };
   };
-  environment[":"] = (arg0Val, arg1Expr) => {
-    return arg0Val ? arg0Val.value : evalExpr(arg1Expr);
+  globalEnv.vars[":"] = (arg0Val, arg1Expr) => {
+    if (typeof arg0Val === "object") {
+      return arg0Val ? arg0Val.value : evalExpr(arg1Expr);
+    }
+    if (typeof arg0Val === "string") {
+      return { [arg0Val]: evalExpr(arg1Expr) };
+    }
   };
 }
 
