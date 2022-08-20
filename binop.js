@@ -145,9 +145,7 @@ function addNativeFunctions() {
   };
   globalEnv.vars[","] = (arg0Val, arg1Expr) => {
     const arg1Val = evalExpr(arg1Expr);
-    if (arg0Val instanceof Array) {
-      return [...arg0Val, arg1Val];
-    }
+    if (arg0Val instanceof Array) return [...arg0Val, arg1Val];
     return [arg0Val, arg1Val];
   };
   globalEnv.vars["=>"] = (arg0Val, arg1Expr) => {
@@ -170,12 +168,11 @@ function addNativeFunctions() {
     return arg0Val || evalExpr(arg1Expr);
   };
   globalEnv.vars["?"] = (arg0Val, arg1Expr) => {
-    return arg0Val && { value: evalExpr(arg1Expr) };
+    return Boolean(arg0Val) && { value: evalExpr(arg1Expr) };
   };
   globalEnv.vars[":"] = (arg0Val, arg1Expr) => {
-    if (typeof arg0Val === "object") {
-      return arg0Val ? arg0Val.value : evalExpr(arg1Expr);
-    }
+    if (typeof arg0Val === "object") return arg0Val.value;
+    if (arg0Val === false) return evalExpr(arg1Expr);
     if (typeof arg0Val === "string") {
       return { [arg0Val]: evalExpr(arg1Expr) };
     }

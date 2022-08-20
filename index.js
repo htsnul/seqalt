@@ -1,6 +1,9 @@
 import { evalCode } from "./binop.js"
 
-const code0 = `
+const codesStr = `
+
+#### Lambda args ####
+
 then = (() => (
   i = 0;
   ()$args.0 || (i = 1);
@@ -11,59 +14,58 @@ then = (() => (
 )), (() => (
   ()print(bbb);
 )));
-`;
 
-const code1 = `
+#### Lambda array ####
+
 i = 0;
 ary = (
   (() => (()print(4))),
   (() => (()print(5)))
 );
 ()(()$ary.0)();
-`;
 
-const code2 = `
+#### Arithmetic ####
+
 ()print((3 + 10) - (8 + 4 + 2));
-()print(3);
-()print(3 == 3);
-`;
 
-const code3 = `
+#### Condtions ####
+
 0 && (()print(10));
 1 && (()print(11));
 1 && (
   ()print(12);
 );
-`;
 
-const code4 = `
+#### Variable ####
+
 a = 5;
 ()print(()$a);
 a = (()$a + 3);
 ()print(()$a);
-`;
 
-const code5 = `
+#### User function ####
+
 fn = (() => (
   ()print(()$args.0);
   ()print(()$args.1);
 ));
+
 (1)fn(2);
 (3)fn(4);
-`;
 
-const code6 = `
-()print(0 ? 3 : 4);
+#### Ternary operator ####
+
 ()print(0 && 3 || 4);
-()print(1 ? 3 : 4);
+()print(0 ? 3 : 4);
 ()print(1 && 3 || 4);
-()print(0 ? 0 : 5);
+()print(1 ? 3 : 4);
 ()print(0 && 0 || 5);
-()print(1 ? 0 : 5);
+()print(0 ? 0 : 5);
 ()print(1 && 0 || 5);
-`;
+()print(1 ? 0 : 5);
 
-const code7 = `
+#### Fibonacci ####
+
 fib = (() => (
   ((()$args.1) < 2) ? (
     ()$args.1
@@ -73,16 +75,16 @@ fib = (() => (
   )
 ));
 ()fib(9)
-`;
 
-const code8 = `
+#### Dictionary ####
+
 a = ((b: 3) + (c: 4));
 ()$a, b = 2;
 ()print(()$a.b);
 ()print(()$a.c);
-`;
 
-const code9 = `
+#### Scope ####
+
 ()print(a);
 ()var a = 1;
 ()(() => (
@@ -102,20 +104,50 @@ const code9 = `
 ()print(()$b);
 `;
 
-
 onload = () => {
   document.body.innerHTML = `
-    <div></div>
+    <style>
+      .samples {
+        position: absolute;
+        background: white;
+        border: 1px solid #ccc;
+      }
+      .samples button {
+        width: 100%;
+      }
+    </style>
+    <details>
+      <summary>Samples</summary>
+      <div class="samples" style="position: absolute; background: white; border: 1px solid #ccc;">
+      </div>
+    </details>
     <div><textarea style="width: 80em; height: 25em;"></textarea></div>
-    <div><button>evalCode</button></div>
+    <div><button class="eval-code">evalCode</button></div>
+    <h4>Log:</h4>
     <pre class="log"></pre>
+    <h4>Result:</h4>
     <pre class="result"></pre>
   `;
-  document.querySelector("textarea").value = code9;
+  {
+    const strs = codesStr.split("####").map((str) => str.trim()).slice(1);
+    const codes = [];
+    for (let i = 0; i < strs.length; i += 2) {
+      codes.push({ title: strs[i], body: strs[i + 1] });
+    }
+    codes.forEach((code) => {
+      const e = document.createElement("div");
+      e.innerHTML = `<button>${code.title}</button>`;
+      e.querySelector("button").onclick = () => {
+        document.querySelector("textarea").value = code.body;
+        document.querySelector("details").open = null;
+      };
+      document.querySelector(".samples").appendChild(e);
+    });
+  }
   globalThis.log = (str) => {
     document.querySelector(".log").innerHTML += str + "\n";
   };
-  document.querySelector("button").onclick = () => {
+  document.querySelector(".eval-code").onclick = () => {
     document.querySelector(".log").innerHTML = "";
     document.querySelector(".result").innerHTML = "";
     const code = document.querySelector("textarea").value;
