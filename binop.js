@@ -1,69 +1,38 @@
 function tokenize(str) {
-  const isParen = (c) => {
-    const cp = c.codePointAt(0);
-    return "(".codePointAt(0) === cp || cp === ")".codePointAt(0);
-  };
-  const isDigit = (c) => {
-    const cp = c.codePointAt(0);
-    return "0".codePointAt(0) <= cp && cp <= "9".codePointAt(0);
-  };
-  const isAlpha = (c) => {
-    const cp = c.codePointAt(0);
-    return (
-      "A".codePointAt(0) <= cp && cp <= "Z".codePointAt(0) ||
-      "a".codePointAt(0) <= cp && cp <= "z".codePointAt(0)
-    );
-  };
-  const isSign = (c) => {
-    const cp = c.codePointAt(0);
-    return (
-      "!".codePointAt(0) <= cp && cp <= "/".codePointAt(0) ||
-      ":".codePointAt(0) <= cp && cp <= "@".codePointAt(0) ||
-      "[".codePointAt(0) <= cp && cp <= "`".codePointAt(0) ||
-      "{".codePointAt(0) <= cp && cp <= "~".codePointAt(0)
-    );
-  };
-  let tokens = [];
+  const tokens = [];
   for (let i = 0; i < str.length;) {
-    if (isParen(str[i])) {
-      tokens.push({ type: "Paren", value: str[i] });
+    let r;
+    if (str[i] === "(") {
+      tokens.push({ type: "GroupStart" });
       i++;
-    } else if (isDigit(str[i])) {
-      let e = i + 1;
-      while (e < str.length && isDigit(str[e])) ++e;
-      tokens.push({ type: "Number", value: Number(str.slice(i, e)) });
-      i = e;
-    } else if (isSign(str[i]) && !isParen(str[i])) {
-      let e = i + 1;
-      while (e < str.length && isSign(str[e]) && !isParen(str[e])) ++e;
-      tokens.push({ type: "String", value: str.slice(i, e) });
-      i = e;
-    } else if (isAlpha(str[i])) {
-      let e = i + 1;
-      while (e < str.length && isAlpha(str[e])) ++e;
-      tokens.push({ type: "String", value: str.slice(i, e) });
-      i = e;
-    } else {
-      ++i;
-    }
+    } else if (str[i] === ")") {
+      tokens.push({ type: "GroupEnd" });
+      i++;
+    } else if (r = str.slice(i).match(/^\d+/)) {
+      tokens.push({ type: "Number", value: Number(r[0]) });
+      i += r[0].length;
+    } else if (r = str.slice(i).match(/^\w+|^[^\w\d\s()]+/)) {
+      tokens.push({ type: "String", value: r[0] });
+      i += r[0].length;
+    } else ++i;
   }
   return tokens;
 }
 
-function parseExpr(tokens, i) {
-  const r0 = parsePrimary(tokens, i);
+function parseTerms(tokens, i) {
+  const r0 = parseTerm(tokens, i);
   if (r0 === undefined) {
     return undefined;
   }
   i = r0[0];
   let expr = r0[1];
   while (i < tokens.length) {
-    const r1 = parsePrimary(tokens, i);
+    const r1 = parseTerm(tokens, i);
     if (r1 === undefined) {
       break;
     }
     i = r1[0];
-    const r2 = parsePrimary(tokens, i);
+    const r2 = parseTerm(tokens, i);
     let exprR = { type: "Null" };
     if (r2 !== undefined) {
       i = r2[0];
@@ -74,22 +43,22 @@ function parseExpr(tokens, i) {
   return [i, expr];
 }
 
-function parsePrimary(tokens, i) {
+function parseTerm(tokens, i) {
   if (i >= tokens.length) {
     return undefined;
   }
   const token = tokens[i];
-  if (token.type === "Paren" && token.value === "(") {
+  if (token.type === "GroupStart") {
     i++;
     let expr;
-    const r = parseExpr(tokens, i);
+    const r = parseTerms(tokens, i);
     if (r === undefined) {
       expr = { type: "Null" };
     } else {
       i = r[0];
       expr = r[1];
     }
-    console.assert(tokens[i].type === "Paren" && tokens[i].value === ")");
+    console.assert(tokens[i].type === "GroupEnd");
     i++;
     return [i, expr];
   }
@@ -102,6 +71,10 @@ function parsePrimary(tokens, i) {
     return [i, { type: "String", value: token.value }];
   }
   return undefined;
+}
+
+function parse(tokens) {
+  return parseTerms(tokens, 0)[1];
 }
 
 function evalExpr(expr) {
@@ -211,7 +184,8 @@ globalThis.log = console.log;
 
 export function evalCode(code) {
   const tokens = tokenize(code);
-  const expr = parseExpr(tokens, 0)[1];
+  const expr = parse(tokens);
+  console.log(expr);
   return evalExpr(expr);
 }
 
