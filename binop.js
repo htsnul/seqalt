@@ -31,7 +31,7 @@ function parseTerms(tokens, i) {
     const r1 = parseTerm(tokens, i);
     if (r1) i = r1.i;
     const expr1 = r1?.expr ?? { type: "Null" };
-    expr0 = { type: "Call", name: r.expr, args: [expr0, expr1] };
+    expr0 = { type: "Call", func: r.expr, args: [expr0, expr1] };
   }
   return { i, expr: expr0 };
 }
@@ -65,22 +65,22 @@ function parse(tokens) {
 function evalExpr(expr) {
   if (expr.type === "Call") {
     const args0Val = evalExpr(expr.args[0]);
-    const name = evalExpr(expr.name);
-    const f = getEnvironmentValue(name);
-    if (typeof f === "function") {
-      return f(args0Val, expr.args[1]);
-    } else {
-      const args = [
-        args0Val,
-        evalExpr(expr.args[1])
-      ];
-      let f = name;
-      environment = { parent: environment };
-      if (typeof name === "string") {
-        f = getEnvironmentValue(name);
+    const func = (() => {
+      const f = evalExpr(expr.func);
+      if (typeof f === "string") {
+        return getEnvironmentValue(f);
+      } else {
+        console.assert(typeof f === "object");
+        return f;
       }
-      environment["args"] = args;
-      const r = evalExpr(f);
+    })();
+    if (typeof func === "function") {
+      return func(args0Val, expr.args[1]);
+    } else {
+      console.assert(typeof func === "object");
+      environment = { parent: environment };
+      environment["args"] = [args0Val, evalExpr(expr.args[1])];
+      const r = evalExpr(func);
       environment = environment.parent;
       return r;
     }
@@ -160,6 +160,12 @@ function addNativeFunctions() {
   };
   environment["||"] = (arg0Val, arg1Expr) => {
     return arg0Val || evalExpr(arg1Expr);
+  };
+  environment["?"] = (arg0Val, arg1Expr) => {
+    return arg0Val && { value: evalExpr(arg1Expr) };
+  };
+  environment[":"] = (arg0Val, arg1Expr) => {
+    return arg0Val ? arg0Val.value : evalExpr(arg1Expr);
   };
 }
 

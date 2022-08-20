@@ -60,7 +60,7 @@ onload = () => {
     <pre class="log"></pre>
     <pre class="result"></pre>
   `;
-  document.querySelector("textarea").value = code0;
+  document.querySelector("textarea").value = code4;
   globalThis.log = (str) => {
     document.querySelector(".log").innerHTML += str + "\n";
   };
