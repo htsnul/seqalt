@@ -151,6 +151,9 @@ function addNativeFunctions() {
   environment["=="] = (arg0Val, arg1Expr) => {
     return arg0Val === evalExpr(arg1Expr);
   };
+  environment["<"] = (arg0Val, arg1Expr) => {
+    return arg0Val < evalExpr(arg1Expr);
+  };
   environment["print"] = (arg0Val, arg1Expr) => {
     log(arg0Val ?? evalExpr(arg1Expr));
     return undefined;

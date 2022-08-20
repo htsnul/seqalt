@@ -52,6 +52,30 @@ fn = (() => (
 (3)fn(4);
 `;
 
+const code6 = `
+()print(0 ? 3 : 4);
+()print(0 && 3 || 4);
+()print(1 ? 3 : 4);
+()print(1 && 3 || 4);
+()print(0 ? 0 : 5);
+()print(0 && 0 || 5);
+()print(1 ? 0 : 5);
+()print(1 && 0 || 5);
+`;
+
+const code7 = `
+fib = (() => (
+  ((()$args.1) < 2) ? (
+    ()$args.1
+  ) : (
+    (()fib(()$args.1 - 1)) +
+    (()fib(()$args.1 - 2))
+  )
+));
+()fib(9)
+`;
+
+
 onload = () => {
   document.body.innerHTML = `
     <div></div>
@@ -60,7 +84,7 @@ onload = () => {
     <pre class="log"></pre>
     <pre class="result"></pre>
   `;
-  document.querySelector("textarea").value = code4;
+  document.querySelector("textarea").value = code7;
   globalThis.log = (str) => {
     document.querySelector(".log").innerHTML += str + "\n";
   };
