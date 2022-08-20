@@ -62,38 +62,30 @@ function parse(tokens) {
   return parseTerms(tokens, 0)?.expr ?? { type: "Null" };
 }
 
+function evalCallExpr(expr) {
+  const args0Val = evalExpr(expr.args[0]);
+  const func = (() => {
+    const f = evalExpr(expr.func);
+    if (typeof f === "string") return getEnvironmentValue(f);
+    if (typeof f === "object") return f;
+  })();
+  if (typeof func === "function") {
+    return func(args0Val, expr.args[1]);
+  }
+  if (typeof func === "object") {
+    environment = { parent: environment };
+    environment["args"] = [args0Val, evalExpr(expr.args[1])];
+    const r = evalExpr(func);
+    environment = environment.parent;
+    return r;
+  }
+}
+
 function evalExpr(expr) {
-  if (expr.type === "Call") {
-    const args0Val = evalExpr(expr.args[0]);
-    const func = (() => {
-      const f = evalExpr(expr.func);
-      if (typeof f === "string") {
-        return getEnvironmentValue(f);
-      } else {
-        console.assert(typeof f === "object");
-        return f;
-      }
-    })();
-    if (typeof func === "function") {
-      return func(args0Val, expr.args[1]);
-    } else {
-      console.assert(typeof func === "object");
-      environment = { parent: environment };
-      environment["args"] = [args0Val, evalExpr(expr.args[1])];
-      const r = evalExpr(func);
-      environment = environment.parent;
-      return r;
-    }
-  }
-  if (expr.type === "Number") {
-    return expr.value;
-  }
-  if (expr.type === "String") {
-    return expr.value;
-  }
-  if (expr.type === "Null") {
-    return undefined;
-  }
+  if (expr.type === "Call") return evalCallExpr(expr);
+  if (expr.type === "Number") return expr.value;
+  if (expr.type === "String") return expr.value;
+  if (expr.type === "Null") return undefined;
 }
 
 let environment = {};
