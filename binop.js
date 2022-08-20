@@ -21,60 +21,45 @@ function tokenize(str) {
 
 function parseTerms(tokens, i) {
   const r0 = parseTerm(tokens, i);
-  if (r0 === undefined) {
-    return undefined;
-  }
-  i = r0[0];
-  let expr = r0[1];
+  if (!r0) return;
+  i = r0.i;
+  let expr0 = r0.expr;
   while (i < tokens.length) {
+    const r = parseTerm(tokens, i);
+    if (!r) break;
+    i = r.i;
     const r1 = parseTerm(tokens, i);
-    if (r1 === undefined) {
-      break;
-    }
-    i = r1[0];
-    const r2 = parseTerm(tokens, i);
-    let exprR = { type: "Null" };
-    if (r2 !== undefined) {
-      i = r2[0];
-      exprR = r2[1];
-    }
-    expr = { type: "Call", name: r1[1], args: [expr, exprR] };
+    if (r1) i = r1.i;
+    const expr1 = r1?.expr ?? { type: "Null" };
+    expr0 = { type: "Call", name: r.expr, args: [expr0, expr1] };
   }
-  return [i, expr];
+  return { i, expr: expr0 };
 }
 
 function parseTerm(tokens, i) {
-  if (i >= tokens.length) {
-    return undefined;
-  }
+  if (i >= tokens.length) return;
   const token = tokens[i];
   if (token.type === "GroupStart") {
     i++;
-    let expr;
     const r = parseTerms(tokens, i);
-    if (r === undefined) {
-      expr = { type: "Null" };
-    } else {
-      i = r[0];
-      expr = r[1];
-    }
+    if (r) i = r.i;
+    const expr = r?.expr ?? { type: "Null" };
     console.assert(tokens[i].type === "GroupEnd");
     i++;
-    return [i, expr];
+    return { i, expr };
   }
   if (token.type === "Number") {
     i++;
-    return [i, { type: "Number", value: token.value }];
+    return { i, expr: { type: "Number", value: token.value } };
   }
   if (token.type === "String") {
     i++;
-    return [i, { type: "String", value: token.value }];
+    return { i, expr: { type: "String", value: token.value } };
   }
-  return undefined;
 }
 
 function parse(tokens) {
-  return parseTerms(tokens, 0)[1];
+  return parseTerms(tokens, 0)?.expr ?? { type: "Null" };
 }
 
 function evalExpr(expr) {
@@ -185,7 +170,6 @@ globalThis.log = console.log;
 export function evalCode(code) {
   const tokens = tokenize(code);
   const expr = parse(tokens);
-  console.log(expr);
   return evalExpr(expr);
 }
 
