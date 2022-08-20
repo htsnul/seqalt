@@ -194,7 +194,7 @@ function addNativeFunctions() {
     return arg0Val === evalExpr(arg1Expr);
   };
   environment["print"] = (arg0Val, arg1Expr) => {
-    console.log(arg0Val, evalExpr(arg1Expr));
+    log(arg0Val ?? evalExpr(arg1Expr));
     return undefined;
   };
   environment["&&"] = (arg0Val, arg1Expr) => {
@@ -207,55 +207,11 @@ function addNativeFunctions() {
 
 addNativeFunctions();
 
-/*
-const code = `
-  then = (() => (
-    i = 0;
-    ()$args.0 || (i = 1);
-    ()(()$args.1.(()$i))();
-  ));
-  0 then((() => (
-    ()print(aaa);
-  )), (() => (
-    ()print(bbb);
-  )));
-  ()print(hoge);
-  i = 0;
-  ary = (
-    (() => (()print(4))),
-    (() => (()print(5)))
-  );
-  ()(()$ary.0)();
-`;
-*/
-const code = `
-  ()print((3 + 10) - (8 + 4 + 2));
-  ()print(3);
-  3print();
-  ()print(3 == 3);
-  0 && (()print(10));
-  1 && (()print(11));
-  1 && (
-    ()print(12);
-  );
-  a = 5;
-  ()print(()$a);
-  a = (()$a + 3);
-  ()print(()$a);
-  fn = (() => (
-    ()print(()$args.0);
-    ()print(()$args.1);
-  ));
-  (1)fn(2);
-  (3)fn(4);
-  ()print(3);
-  );
-`;
-if (0) console.log(code);
-tokens = tokenize(code);
-if (0) console.log(tokens);
-expr = parseExpr(tokens, 0)[1];
-if (0) console.log(JSON.stringify(expr, null, 2));
-console.log(evalExpr(expr));
-if (0) console.log(environment);
+globalThis.log = console.log;
+
+export function evalCode(code) {
+  const tokens = tokenize(code);
+  const expr = parseExpr(tokens, 0)[1];
+  return evalExpr(expr);
+}
 
