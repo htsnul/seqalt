@@ -112,6 +112,9 @@ function addNativeFunctions() {
   envStack[0]["-"] = (argLVal, argRExpr) => {
     return argLVal - evalExpr(argRExpr);
   };
+  envStack[0]["*"] = (argLVal, argRExpr) => {
+    return argLVal * evalExpr(argRExpr);
+  };
   envStack[0]["#"] = (argLVal, argRExpr) => {
     return argLVal;
   };
@@ -175,6 +178,15 @@ function addNativeFunctions() {
     if (typeof argLVal === "string") {
       return { [argLVal]: evalExpr(argRExpr) };
     }
+  };
+  envStack[0]["map"] = (argLVal, argRExpr) => {
+    const func = evalExpr(argRExpr)
+    return argLVal.map((v) => {
+      envStack.push({ args: { r: v } });
+      const r = evalExpr(func);
+      envStack.pop();
+      return r;
+    });
   };
 }
 
