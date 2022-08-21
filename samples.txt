@@ -47,13 +47,14 @@ a = (()$a + 3);
 
 #### User function ####
 
-fn = (() => (
+printLeftRightAndSum = (() => (
   ()print(()$args.l);
   ()print(()$args.r);
+  ()print(()$args.l + (()$args.r));
 ));
 
-(1)fn(2);
-(3)fn(4);
+(1)printLeftRightAndSum(2);
+(3)printLeftRightAndSum(4);
 
 #### Ternary operator ####
 
@@ -77,7 +78,10 @@ fib = (() => (
     (()fib(()$args.r - 2))
   )
 ));
-()fib(9)
+()print(()fib(7));
+()print(()fib(8));
+()print(()fib(9));
+()print(()fib(10));
 
 #### Dictionary ####
 
