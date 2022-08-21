@@ -76,9 +76,9 @@ function evalCallExpr(expr) {
   }
   if (typeof func === "object") {
     envStack.push({ args: { l: argsLVal, r: evalExpr(expr.args.r) } });
-    const r = evalExpr(func);
+    const result = evalExpr(func);
     envStack.pop();
-    return r;
+    return result;
   }
 }
 
@@ -99,100 +99,81 @@ function envVal(name) {
   return ownerEnv(name)[name];
 }
 
-function addNativeFunctions() {
-  envStack[0]["var"] = (argLVal, argRExpr) => {
-    const k = evalExpr(argRExpr);
-    envStack.at(-1)[k] = null;
-    return k;
+function addNativeFuncs() {
+  envStack[0]["+"] = (l, rExpr) => {
+    if (typeof l === "object") return { ...l, ...evalExpr(rExpr) };
+    return l + evalExpr(rExpr);
   };
-  envStack[0]["+"] = (argLVal, argRExpr) => {
-    if (typeof argLVal === "object") {
-      return { ...argLVal, ...evalExpr(argRExpr) };
+  envStack[0]["-"] = (l, rExpr) => {
+    return l - evalExpr(rExpr);
+  };
+  envStack[0]["*"] = (l, rExpr) => {
+    return l * evalExpr(rExpr);
+  };
+  envStack[0]["#"] = (l, rExpr) => l;
+  envStack[0][";"] = (l, rExpr) => evalExpr(rExpr);
+  envStack[0]["var"] = (l, rExpr) => {
+    const name = evalExpr(rExpr);
+    envStack.at(-1)[name] = null;
+    return name;
+  };
+  envStack[0]["="] = (l, rExpr) => {
+    if (l instanceof Array) {
+      console.assert(l.length === 2);
+      const [obj, key] = l;
+      return obj[key] = evalExpr(rExpr);
     }
-    return argLVal + evalExpr(argRExpr);
+    const name = l;
+    const env = ownerEnv(name) ?? envStack.at(-1);
+    return env[name] = evalExpr(rExpr);
   };
-  envStack[0]["-"] = (argLVal, argRExpr) => {
-    return argLVal - evalExpr(argRExpr);
+  envStack[0]["$"] = (l, rExpr) => envVal(evalExpr(rExpr));
+  envStack[0]["."] = (l, rExpr) => l[evalExpr(rExpr)];
+  envStack[0][","] = (l, rExpr) => {
+    const r = evalExpr(rExpr);
+    if (l instanceof Array) return [...l, r];
+    return [l, r];
   };
-  envStack[0]["*"] = (argLVal, argRExpr) => {
-    return argLVal * evalExpr(argRExpr);
+  envStack[0]["=>"] = (l, rExpr) => rExpr;
+  envStack[0]["=="] = (l, rExpr) => {
+    return l === evalExpr(rExpr);
   };
-  envStack[0]["#"] = (argLVal, argRExpr) => {
-    return argLVal;
+  envStack[0]["<"] = (l, rExpr) => {
+    return l < evalExpr(rExpr);
   };
-  envStack[0][";"] = (argLVal, argRExpr) => {
-    return evalExpr(argRExpr);
-  };
-  envStack[0]["="] = (argLVal, argRExpr) => {
-    if (argLVal instanceof Array) {
-      console.assert(argLVal.length === 2);
-      const [obj, k] = argLVal;
-      const v = evalExpr(argRExpr);
-      obj[k] = v;
-      return v;
-    }
-    const k = argLVal;
-    const v = evalExpr(argRExpr);
-    const env = ownerEnv(k) ?? envStack.at(-1);
-    env[k] = v;
-    return v;
-  };
-  envStack[0]["$"] = (argLVal, argRExpr) => {
-    const k = evalExpr(argRExpr);
-    const v = envVal(k);
-    return v;
-  };
-  envStack[0]["."] = (argLVal, argRExpr) => {
-    const obj = argLVal;
-    const key = evalExpr(argRExpr);
-    return obj[key];
-  };
-  envStack[0][","] = (argLVal, argRExpr) => {
-    const argRVal = evalExpr(argRExpr);
-    if (argLVal instanceof Array) return [...argLVal, argRVal];
-    return [argLVal, argRVal];
-  };
-  envStack[0]["=>"] = (argLVal, argRExpr) => {
-    return argRExpr;
-  };
-  envStack[0]["=="] = (argLVal, argRExpr) => {
-    return argLVal === evalExpr(argRExpr);
-  };
-  envStack[0]["<"] = (argLVal, argRExpr) => {
-    return argLVal < evalExpr(argRExpr);
-  };
-  envStack[0]["print"] = (argLVal, argRExpr) => {
-    log(argLVal ?? evalExpr(argRExpr));
+  envStack[0]["print"] = (l, rExpr) => {
+    log(l ?? evalExpr(rExpr));
     return undefined;
   };
-  envStack[0]["&&"] = (argLVal, argRExpr) => {
-    return argLVal && evalExpr(argRExpr);
+  envStack[0]["&&"] = (l, rExpr) => {
+    return l && evalExpr(rExpr);
   };
-  envStack[0]["||"] = (argLVal, argRExpr) => {
-    return argLVal || evalExpr(argRExpr);
+  envStack[0]["||"] = (l, rExpr) => {
+    return l || evalExpr(rExpr);
   };
-  envStack[0]["?"] = (argLVal, argRExpr) => {
-    return Boolean(argLVal) && { value: evalExpr(argRExpr) };
+  envStack[0]["?"] = (l, rExpr) => {
+    return Boolean(l) && { value: evalExpr(rExpr) };
   };
-  envStack[0][":"] = (argLVal, argRExpr) => {
-    if (typeof argLVal === "object") return argLVal.value;
-    if (argLVal === false) return evalExpr(argRExpr);
-    if (typeof argLVal === "string") {
-      return { [argLVal]: evalExpr(argRExpr) };
+  envStack[0][":"] = (l, rExpr) => {
+    if (typeof l === "object") return l.value;
+    if (l === false) return evalExpr(rExpr);
+    if (typeof l === "string") {
+      return { [l]: evalExpr(rExpr) };
     }
   };
-  envStack[0]["map"] = (argLVal, argRExpr) => {
-    const func = evalExpr(argRExpr);
-    return argLVal.map((v) => {
+  envStack[0]["map"] = (l, rExpr) => {
+    const r = evalExpr(rExpr);
+    return l.map((v) => {
       envStack.push({ args: { r: v } });
-      const r = evalExpr(func);
+      const result = evalExpr(r);
       envStack.pop();
-      return r;
+      return result;
     });
   };
+  envStack[0]["forEach"] = envStack[0]["map"];
 }
 
-addNativeFunctions();
+addNativeFuncs();
 
 globalThis.log = console.log;
 

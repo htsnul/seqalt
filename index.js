@@ -10,12 +10,13 @@ onload = async () => {
         border: 1px solid #ccc;
       }
     </style>
+    <h1>binop playground</h1>
     <details>
       <summary>Samples</summary>
       <table class="samples"></table>
     </details>
     <div><textarea style="width: 80em; height: 25em;"></textarea></div>
-    <div><button class="eval-code">evalCode</button></div>
+    <div><button class="eval-code">eval</button></div>
     <h4>Log:</h4>
     <pre class="log"></pre>
     <h4>Result:</h4>
