@@ -1,6 +1,6 @@
 function tokenize(str) {
   const tokens = [];
-  for (let i = 0; i < str.length;) {
+  for (let i = 0; i < str.length; ) {
     let r;
     if (str[i] === "(") {
       tokens.push({ type: "GroupStart" });
@@ -8,10 +8,10 @@ function tokenize(str) {
     } else if (str[i] === ")") {
       tokens.push({ type: "GroupEnd" });
       i++;
-    } else if (r = str.slice(i).match(/^\d+/)) {
+    } else if ((r = str.slice(i).match(/^\d+/))) {
       tokens.push({ type: "Number", value: Number(r[0]) });
       i += r[0].length;
-    } else if (r = str.slice(i).match(/^\w+|^[^\w\d\s()]+/)) {
+    } else if ((r = str.slice(i).match(/^\w+|^[^\w\d\s()]+/))) {
       tokens.push({ type: "String", value: r[0] });
       i += r[0].length;
     } else ++i;
@@ -95,7 +95,9 @@ function ownerEnv(name) {
   return [...envStack].reverse().find((e) => e[name] !== undefined);
 }
 
-function envVal(name) { return ownerEnv(name)[name]; }
+function envVal(name) {
+  return ownerEnv(name)[name];
+}
 
 function addNativeFunctions() {
   envStack[0]["var"] = (argLVal, argRExpr) => {
@@ -180,7 +182,7 @@ function addNativeFunctions() {
     }
   };
   envStack[0]["map"] = (argLVal, argRExpr) => {
-    const func = evalExpr(argRExpr)
+    const func = evalExpr(argRExpr);
     return argLVal.map((v) => {
       envStack.push({ args: { r: v } });
       const r = evalExpr(func);
@@ -199,4 +201,3 @@ export function evalCode(code) {
   const expr = parse(tokens);
   return evalExpr(expr);
 }
-
