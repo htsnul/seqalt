@@ -20,20 +20,22 @@ function tokenize(str) {
 }
 
 function parseTerms(tokens, i) {
-  const r0 = parseTerm(tokens, i);
-  if (!r0) return;
-  i = r0.i;
-  let expr0 = r0.expr;
+  const result = parseTerm(tokens, i);
+  if (!result) return;
+  i = result.i;
+  let expr = result.expr;
   while (i < tokens.length) {
-    const r = parseTerm(tokens, i);
-    if (!r) break;
-    i = r.i;
-    const r1 = parseTerm(tokens, i);
-    if (r1) i = r1.i;
-    const expr1 = r1?.expr ?? { type: "Null" };
-    expr0 = { type: "Call", func: r.expr, args: [expr0, expr1] };
+    const resultC = parseTerm(tokens, i);
+    if (!resultC) break;
+    i = resultC.i;
+    const resultR = parseTerm(tokens, i);
+    if (resultR) i = resultR.i;
+    const exprL = expr;
+    const exprC = resultC.expr;
+    const exprR = resultR?.expr ?? { type: "Null" };
+    expr = { type: "Call", func: exprC, args: { l: exprL, r: exprR } };
   }
-  return { i, expr: expr0 };
+  return { i, expr };
 }
 
 function parseTerm(tokens, i) {
@@ -41,9 +43,9 @@ function parseTerm(tokens, i) {
   const token = tokens[i];
   if (token.type === "GroupStart") {
     i++;
-    const r = parseTerms(tokens, i);
-    if (r) i = r.i;
-    const expr = r?.expr ?? { type: "Null" };
+    const result = parseTerms(tokens, i);
+    if (result) i = result.i;
+    const expr = result?.expr ?? { type: "Null" };
     console.assert(tokens[i].type === "GroupEnd");
     i++;
     return { i, expr };
@@ -63,17 +65,17 @@ function parse(tokens) {
 }
 
 function evalCallExpr(expr) {
-  const args0Val = evalExpr(expr.args[0]);
+  const argsLVal = evalExpr(expr.args.l);
   const func = (() => {
     const f = evalExpr(expr.func);
     if (typeof f === "string") return envVal(f);
     if (typeof f === "object") return f;
   })();
   if (typeof func === "function") {
-    return func(args0Val, expr.args[1]);
+    return func(argsLVal, expr.args.r);
   }
   if (typeof func === "object") {
-    envStack.push({ args: [args0Val, evalExpr(expr.args[1])] });
+    envStack.push({ args: { l: argsLVal, r: evalExpr(expr.args.r) } });
     const r = evalExpr(func);
     envStack.pop();
     return r;

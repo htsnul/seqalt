@@ -1,14 +1,20 @@
 #### Lambda args ####
 
 then = (() => (
-  i = 0;
-  ()$args.0 || (i = 1);
-  ()(()$args.1.(()$i))();
+  ()var i = (()$args.l ? 0 : 1);
+  ()(()$args.r.(()$i))();
 ));
+
 0 then((() => (
-  ()print(aaa);
+  ()print(a);
 )), (() => (
-  ()print(bbb);
+  ()print(b);
+)));
+
+1 then((() => (
+  ()print(c);
+)), (() => (
+  ()print(d);
 )));
 
 #### Lambda array ####
@@ -42,8 +48,8 @@ a = (()$a + 3);
 #### User function ####
 
 fn = (() => (
-  ()print(()$args.0);
-  ()print(()$args.1);
+  ()print(()$args.l);
+  ()print(()$args.r);
 ));
 
 (1)fn(2);
@@ -64,11 +70,11 @@ fn = (() => (
 #### Fibonacci ####
 
 fib = (() => (
-  ((()$args.1) < 2) ? (
-    ()$args.1
+  ((()$args.r) < 2) ? (
+    ()$args.r
   ) : (
-    (()fib(()$args.1 - 1)) +
-    (()fib(()$args.1 - 2))
+    (()fib(()$args.r - 1)) +
+    (()fib(()$args.r - 2))
   )
 ));
 ()fib(9)
