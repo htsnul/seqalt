@@ -98,82 +98,82 @@ function ownerEnv(name) {
 function envVal(name) { return ownerEnv(name)[name]; }
 
 function addNativeFunctions() {
-  envStack[0]["var"] = (arg0Val, arg1Expr) => {
-    const k = evalExpr(arg1Expr);
+  envStack[0]["var"] = (argLVal, argRExpr) => {
+    const k = evalExpr(argRExpr);
     envStack.at(-1)[k] = null;
     return k;
   };
-  envStack[0]["+"] = (arg0Val, arg1Expr) => {
-    if (typeof arg0Val === "object") {
-      return { ...arg0Val, ...evalExpr(arg1Expr) };
+  envStack[0]["+"] = (argLVal, argRExpr) => {
+    if (typeof argLVal === "object") {
+      return { ...argLVal, ...evalExpr(argRExpr) };
     }
-    return arg0Val + evalExpr(arg1Expr);
+    return argLVal + evalExpr(argRExpr);
   };
-  envStack[0]["-"] = (arg0Val, arg1Expr) => {
-    return arg0Val - evalExpr(arg1Expr);
+  envStack[0]["-"] = (argLVal, argRExpr) => {
+    return argLVal - evalExpr(argRExpr);
   };
-  envStack[0]["#"] = (arg0Val, arg1Expr) => {
-    return arg0Val;
+  envStack[0]["#"] = (argLVal, argRExpr) => {
+    return argLVal;
   };
-  envStack[0][";"] = (arg0Val, arg1Expr) => {
-    return evalExpr(arg1Expr);
+  envStack[0][";"] = (argLVal, argRExpr) => {
+    return evalExpr(argRExpr);
   };
-  envStack[0]["="] = (arg0Val, arg1Expr) => {
-    if (arg0Val instanceof Array) {
-      console.assert(arg0Val.length === 2);
-      const [obj, k] = arg0Val;
-      const v = evalExpr(arg1Expr);
+  envStack[0]["="] = (argLVal, argRExpr) => {
+    if (argLVal instanceof Array) {
+      console.assert(argLVal.length === 2);
+      const [obj, k] = argLVal;
+      const v = evalExpr(argRExpr);
       obj[k] = v;
       return v;
     }
-    const k = arg0Val;
-    const v = evalExpr(arg1Expr);
+    const k = argLVal;
+    const v = evalExpr(argRExpr);
     const env = ownerEnv(k) ?? envStack.at(-1);
     env[k] = v;
     return v;
   };
-  envStack[0]["$"] = (arg0Val, arg1Expr) => {
-    const k = evalExpr(arg1Expr);
+  envStack[0]["$"] = (argLVal, argRExpr) => {
+    const k = evalExpr(argRExpr);
     const v = envVal(k);
     return v;
   };
-  envStack[0]["."] = (arg0Val, arg1Expr) => {
-    const obj = arg0Val;
-    const key = evalExpr(arg1Expr);
+  envStack[0]["."] = (argLVal, argRExpr) => {
+    const obj = argLVal;
+    const key = evalExpr(argRExpr);
     return obj[key];
   };
-  envStack[0][","] = (arg0Val, arg1Expr) => {
-    const arg1Val = evalExpr(arg1Expr);
-    if (arg0Val instanceof Array) return [...arg0Val, arg1Val];
-    return [arg0Val, arg1Val];
+  envStack[0][","] = (argLVal, argRExpr) => {
+    const argRVal = evalExpr(argRExpr);
+    if (argLVal instanceof Array) return [...argLVal, argRVal];
+    return [argLVal, argRVal];
   };
-  envStack[0]["=>"] = (arg0Val, arg1Expr) => {
-    return arg1Expr;
+  envStack[0]["=>"] = (argLVal, argRExpr) => {
+    return argRExpr;
   };
-  envStack[0]["=="] = (arg0Val, arg1Expr) => {
-    return arg0Val === evalExpr(arg1Expr);
+  envStack[0]["=="] = (argLVal, argRExpr) => {
+    return argLVal === evalExpr(argRExpr);
   };
-  envStack[0]["<"] = (arg0Val, arg1Expr) => {
-    return arg0Val < evalExpr(arg1Expr);
+  envStack[0]["<"] = (argLVal, argRExpr) => {
+    return argLVal < evalExpr(argRExpr);
   };
-  envStack[0]["print"] = (arg0Val, arg1Expr) => {
-    log(arg0Val ?? evalExpr(arg1Expr));
+  envStack[0]["print"] = (argLVal, argRExpr) => {
+    log(argLVal ?? evalExpr(argRExpr));
     return undefined;
   };
-  envStack[0]["&&"] = (arg0Val, arg1Expr) => {
-    return arg0Val && evalExpr(arg1Expr);
+  envStack[0]["&&"] = (argLVal, argRExpr) => {
+    return argLVal && evalExpr(argRExpr);
   };
-  envStack[0]["||"] = (arg0Val, arg1Expr) => {
-    return arg0Val || evalExpr(arg1Expr);
+  envStack[0]["||"] = (argLVal, argRExpr) => {
+    return argLVal || evalExpr(argRExpr);
   };
-  envStack[0]["?"] = (arg0Val, arg1Expr) => {
-    return Boolean(arg0Val) && { value: evalExpr(arg1Expr) };
+  envStack[0]["?"] = (argLVal, argRExpr) => {
+    return Boolean(argLVal) && { value: evalExpr(argRExpr) };
   };
-  envStack[0][":"] = (arg0Val, arg1Expr) => {
-    if (typeof arg0Val === "object") return arg0Val.value;
-    if (arg0Val === false) return evalExpr(arg1Expr);
-    if (typeof arg0Val === "string") {
-      return { [arg0Val]: evalExpr(arg1Expr) };
+  envStack[0][":"] = (argLVal, argRExpr) => {
+    if (typeof argLVal === "object") return argLVal.value;
+    if (argLVal === false) return evalExpr(argRExpr);
+    if (typeof argLVal === "string") {
+      return { [argLVal]: evalExpr(argRExpr) };
     }
   };
 }
