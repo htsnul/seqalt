@@ -63,16 +63,16 @@ function parse(tokens) {
   return parseSequence(tokens, 0)?.expr ?? { type: "Null" };
 }
 
+function applyUserFunc(func, l, r) {
+  env = { parentEnv: env, args: { l, r } };
+  const val = evalExpr(func);
+  env = env.parentEnv;
+  return val;
+}
+
 function applyFunc(func, l, rExpr) {
-  if (typeof func === "function") {
-    return func(l, rExpr);
-  }
-  if (typeof func === "object") {
-    envStack.push({ args: { l, r: evalExpr(rExpr) } });
-    const val = evalExpr(func);
-    envStack.pop();
-    return val;
-  }
+  if (typeof func === "function") return func(l, rExpr);
+  if (typeof func === "object") return applyUserFunc(func, l, evalExpr(rExpr));
 }
 
 function evalSequenceExpr(expr) {
@@ -95,10 +95,12 @@ function evalExpr(expr) {
   if (expr.type === "Null") return undefined;
 }
 
-const envStack = [{}];
+let env = {};
 
 function ownerEnv(name) {
-  return [...envStack].reverse().find((e) => e[name] !== undefined);
+  for (let e = env; e; e = e.parentEnv) {
+    if (e[name] !== undefined) return e;
+  }
 }
 
 function envVal(name) {
@@ -106,81 +108,73 @@ function envVal(name) {
 }
 
 function addGlobalVals() {
-  envStack[0]["@"] = null;
-  envStack[0]["+"] = (l, rExpr) => {
+  env["@"] = null;
+  env["+"] = (l, rExpr) => {
     if (typeof l === "object") return { ...l, ...evalExpr(rExpr) };
     return l + evalExpr(rExpr);
   };
-  envStack[0]["-"] = (l, rExpr) => {
+  env["-"] = (l, rExpr) => {
     return l - evalExpr(rExpr);
   };
-  envStack[0]["*"] = (l, rExpr) => {
+  env["*"] = (l, rExpr) => {
     return l * evalExpr(rExpr);
   };
-  envStack[0]["#"] = (l, rExpr) => l;
-  envStack[0][";"] = (l, rExpr) => evalExpr(rExpr);
-  envStack[0]["var"] = (l, rExpr) => {
+  env["#"] = (l, rExpr) => l;
+  env[";"] = (l, rExpr) => evalExpr(rExpr);
+  env["var"] = (l, rExpr) => {
     const name = evalExpr(rExpr);
-    envStack.at(-1)[name] = null;
+    env[name] = null;
     return name;
   };
-  envStack[0]["="] = (l, rExpr) => {
+  env["="] = (l, rExpr) => {
     if (l instanceof Array) {
       console.assert(l.length === 2);
       const [obj, key] = l;
       return obj[key] = evalExpr(rExpr);
     }
     const name = l;
-    const env = ownerEnv(name) ?? envStack.at(-1);
-    return env[name] = evalExpr(rExpr);
+    const e = ownerEnv(name) ?? env;
+    return e[name] = evalExpr(rExpr);
   };
-  envStack[0]["$"] = (l, rExpr) => envVal(evalExpr(rExpr));
-  envStack[0]["."] = (l, rExpr) => l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(rExpr)];
-  envStack[0][","] = (l, rExpr) => {
+  env["$"] = (l, rExpr) => envVal(evalExpr(rExpr));
+  env["."] = (l, rExpr) => l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(rExpr)];
+  env[","] = (l, rExpr) => {
     const r = evalExpr(rExpr);
     if (l instanceof Array) return [...l, r];
     return [l, r];
   };
-  envStack[0]["=>"] = (l, rExpr) => rExpr;
-  envStack[0]["=="] = (l, rExpr) => {
+  env["=>"] = (l, rExpr) => {
+    return rExpr;
+  }
+  env["=="] = (l, rExpr) => {
     return l === evalExpr(rExpr);
   };
-  envStack[0]["<"] = (l, rExpr) => {
+  env["<"] = (l, rExpr) => {
     return l < evalExpr(rExpr);
   };
-  envStack[0]["print"] = (l, rExpr) => {
+  env["print"] = (l, rExpr) => {
     log(l ?? evalExpr(rExpr));
     return undefined;
   };
-  envStack[0]["&&"] = (l, rExpr) => {
+  env["&&"] = (l, rExpr) => {
     return l && evalExpr(rExpr);
   };
-  envStack[0]["||"] = (l, rExpr) => {
+  env["||"] = (l, rExpr) => {
     return l || evalExpr(rExpr);
   };
-  envStack[0]["?"] = (l, rExpr) => {
+  env["?"] = (l, rExpr) => {
     return Boolean(l) && { value: evalExpr(rExpr) };
   };
-  envStack[0][":"] = (l, rExpr) => {
+  env[":"] = (l, rExpr) => {
     if (typeof l === "object") return l.value;
     if (l === false) return evalExpr(rExpr);
     if (typeof l === "string") {
       return { [l]: evalExpr(rExpr) };
     }
   };
-  envStack[0]["length"] = (l, rExpr) => {
-    return evalExpr(rExpr).length;
-  }
-  envStack[0]["map"] = (l, rExpr) => {
-    const r = evalExpr(rExpr);
-    return l.map((v) => {
-      envStack.push({ args: { r: v } });
-      const result = evalExpr(r);
-      envStack.pop();
-      return result;
-    });
-  };
-  envStack[0]["forEach"] = envStack[0]["map"];
+  env["length"] = (l, rExpr) => evalExpr(rExpr).length;
+  env["map"] = (l, rExpr) => l.map((v) => applyUserFunc(evalExpr(rExpr), undefined, v));
+  env["forEach"] = env["map"];
 }
 
 addGlobalVals();

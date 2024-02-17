@@ -152,3 +152,7 @@ a.c, "d" = 5;
 );
 (nums)forEach(() => (@print(args.r)));
 
+#### Closure ####
+
+
+

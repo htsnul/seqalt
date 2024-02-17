@@ -10,7 +10,7 @@ onload = async () => {
         border: 1px solid #ccc;
       }
     </style>
-    <h1>binop playground</h1>
+    <h1>seqalt playground</h1>
     <details>
       <summary>Samples</summary>
       <table class="samples"></table>
