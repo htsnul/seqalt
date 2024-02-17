@@ -3,18 +3,16 @@ function tokenize(str) {
   for (let i = 0; i < str.length;) {
     let r;
     if (["(", "[", "{"].includes(str[i])) {
-      tokens.push({ type: "SequenceStart", string: str[i] });
-      i++;
+      tokens.push({ type: "SequenceStart", string: str[i++] });
     } else if ([")", "]", "}"].includes(str[i])) {
-      tokens.push({ type: "SequenceEnd", string: str[i] });
-      i++;
+      tokens.push({ type: "SequenceEnd", string: str[i++] });
     } else if (r = str.slice(i).match(/^\d+/)) {
       tokens.push({ type: "Number", string: r[0] });
       i += r[0].length;
     } else if (r = str.slice(i).match(/^"((\\.|[^"])*)"/)) {
       tokens.push({ type: "String", string: r[1].replace(/\\./g, (s) => s[1]) });
       i += r[0].length;
-    } else if (r = str.slice(i).match(/^\w+|^[^\w\d\s()"]+/)) {
+    } else if (r = str.slice(i).match(/^[A-Za-z_]\w*|^[^\w\s\(\)\[\]{}"]+/)) {
       tokens.push({ type: "Symbol", string: r[0] });
       i += r[0].length;
     } else ++i;
@@ -24,9 +22,8 @@ function tokenize(str) {
 
 function parseSequence(tokens, i, isArray) {
   const exprs = [];
-  while (i < tokens.length) {
+  while (i < tokens.length && tokens[i].type !== "SequenceEnd") {
     const result = parseExpr(tokens, i);
-    if (!result) break;
     i = result.i;
     exprs.push(result.expr);
   }
@@ -34,34 +31,24 @@ function parseSequence(tokens, i, isArray) {
 }
 
 function parseExpr(tokens, i) {
-  if (i >= tokens.length) return;
   const token = tokens[i];
   if (token.type === "SequenceStart") {
-    i++;
-    const result = parseSequence(tokens, i, token.string === "[");
-    if (result) i = result.i;
-    const expr = result?.expr ?? { type: "Null" };
-    console.assert(tokens[i].type === "SequenceEnd");
-    i++;
-    return { i, expr };
+    const result = parseSequence(tokens, i + 1, token.string === "[");
+    console.assert(tokens[result.i].type === "SequenceEnd");
+    return { i: result.i + 1, expr: result.expr };
   }
   if (token.type === "Number") {
-    i++;
-    return { i, expr: { type: "Number", value: Number(token.string) } };
+    return { i: i + 1, expr: { type: "Number", value: Number(token.string) } };
   }
   if (token.type === "String") {
-    i++;
-    return { i, expr: { type: "String", value: token.string } };
+    return { i: i + 1, expr: { type: "String", value: token.string } };
   }
   if (token.type === "Symbol") {
-    i++;
-    return { i, expr: { type: "Symbol", value: token.string } };
+    return { i: i + 1, expr: { type: "Symbol", value: token.string } };
   }
 }
 
-function parse(tokens) {
-  return parseSequence(tokens, 0)?.expr ?? { type: "Null" };
-}
+function parse(tokens) { return parseSequence(tokens, 0).expr; }
 
 function applyUserFunc(func, l, r) {
   const env = { parentEnv: func.env, args: { l, r } };
@@ -96,13 +83,11 @@ function evalExpr(env, expr) {
 
 function ownerEnv(env, name) {
   for (let e = env; e; e = e.parentEnv) {
-    if (e[name] !== undefined) return e;
+    if (name in e) return e;
   }
 }
 
-function envVal(env, name) {
-  return ownerEnv(env, name)[name];
-}
+function envVal(env, name) { return ownerEnv(env, name)[name]; }
 
 function addGlobalVals(env) {
   env["@"] = null;
