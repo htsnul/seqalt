@@ -64,126 +64,112 @@ function parse(tokens) {
 }
 
 function applyUserFunc(func, l, r) {
-  env = { parentEnv: func.env, args: { l, r } };
-  const val = evalExpr(func.expr);
-  env = env.parentEnv;
+  const env = { parentEnv: func.env, args: { l, r } };
+  const val = evalExpr(env, func.expr);
   return val;
 }
 
-function applyFunc(func, l, rExpr) {
-  if (typeof func === "function") return func(l, rExpr);
-  if (typeof func === "object") return applyUserFunc(func, l, evalExpr(rExpr));
+function applyFunc(env, func, l, rExpr) {
+  if (typeof func === "function") return func(env, l, rExpr);
+  if (typeof func === "object") return applyUserFunc(func, l, evalExpr(env, rExpr));
 }
 
-function evalSequenceExpr(expr) {
+function evalSequenceExpr(env, expr) {
   if (expr.exprs.length === 0) return expr.isArray ? [] : undefined;
-  let val = evalExpr(expr.exprs[0]);
+  let val = evalExpr(env, expr.exprs[0]);
   if (expr.isArray) val = [val];
   for (let i = 1; i < expr.exprs.length;) {
-    const func = evalExpr(expr.exprs[i++]);
+    const func = evalExpr(env, expr.exprs[i++]);
     const rExpr = expr.exprs[i++] ?? { type: "Null" };
-    val = applyFunc(func, val, rExpr);
+    val = applyFunc(env, func, val, rExpr);
   }
   return val;
 }
 
-function evalExpr(expr) {
-  if (expr.type === "Sequence") return evalSequenceExpr(expr);
+function evalExpr(env, expr) {
+  if (expr.type === "Sequence") return evalSequenceExpr(env, expr);
   if (expr.type === "Number") return expr.value;
   if (expr.type === "String") return expr.value;
-  if (expr.type === "Symbol") return envVal(expr.value);
+  if (expr.type === "Symbol") return envVal(env, expr.value);
   if (expr.type === "Null") return undefined;
 }
 
-let env = {};
-
-function ownerEnv(name) {
+function ownerEnv(env, name) {
   for (let e = env; e; e = e.parentEnv) {
     if (e[name] !== undefined) return e;
   }
 }
 
-function envVal(name) {
-  return ownerEnv(name)[name];
+function envVal(env, name) {
+  return ownerEnv(env, name)[name];
 }
 
-function addGlobalVals() {
+function addGlobalVals(env) {
   env["@"] = null;
   env["_"] = null;
-  env["+"] = (l, rExpr) => {
-    if (typeof l === "object") return { ...l, ...evalExpr(rExpr) };
-    return l + evalExpr(rExpr);
-  };
-  env["-"] = (l, rExpr) => {
-    return l - evalExpr(rExpr);
-  };
-  env["*"] = (l, rExpr) => {
-    return l * evalExpr(rExpr);
-  };
-  env["#"] = (l, rExpr) => l;
-  env[";"] = (l, rExpr) => evalExpr(rExpr);
-  env["var"] = (l, rExpr) => {
-    const name = evalExpr(rExpr);
+  env["#"] = (env, l, rExpr) => l;
+  env[";"] = (env, l, rExpr) => evalExpr(env, rExpr);
+  env["+"] = (env, l, rExpr) => l + evalExpr(env, rExpr);
+  env["-"] = (env, l, rExpr) => l - evalExpr(env, rExpr);
+  env["*"] = (env, l, rExpr) => l * evalExpr(env, rExpr);
+  env["=="] = (env, l, rExpr) => l === evalExpr(env, rExpr);
+  env["!="] = (env, l, rExpr) => l !== evalExpr(env, rExpr);
+  env["<"] = (env, l, rExpr) => l < evalExpr(env, rExpr);
+  env["<="] = (env, l, rExpr) => l <= evalExpr(env, rExpr);
+  env[">"] = (env, l, rExpr) => l > evalExpr(env, rExpr);
+  env[">="] = (env, l, rExpr) => l >= evalExpr(env, rExpr);
+  env["var"] = (env, l, rExpr) => {
+    const name = evalExpr(env, rExpr);
     env[name] = null;
     return name;
   };
-  env["="] = (l, rExpr) => {
+  env["="] = (env, l, rExpr) => {
     if (l instanceof Array) {
       console.assert(l.length === 2);
       const [obj, key] = l;
-      return obj[key] = evalExpr(rExpr);
+      return obj[key] = evalExpr(env, rExpr);
     }
     const name = l;
-    const e = ownerEnv(name) ?? env;
-    return e[name] = evalExpr(rExpr);
+    const e = ownerEnv(env, name) ?? env;
+    return e[name] = evalExpr(env, rExpr);
   };
-  env["$"] = (l, rExpr) => envVal(evalExpr(rExpr));
-  env["."] = (l, rExpr) => l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(rExpr)];
-  env[","] = (l, rExpr) => {
-    const r = evalExpr(rExpr);
+  env["."] = (env, l, rExpr) => {
+    return l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(env, rExpr)];
+  };
+  env[","] = (env, l, rExpr) => {
+    const r = evalExpr(env, rExpr);
     if (l instanceof Array) return [...l, r];
+    if (typeof l === "object" && typeof r === "object") return { ...l, ...r };
     return [l, r];
   };
-  env["=>"] = (l, rExpr) => {
-    return { env, expr: rExpr };
-  }
-  env["=="] = (l, rExpr) => {
-    return l === evalExpr(rExpr);
+  env["&&"] = (env, l, rExpr) => l && evalExpr(env, rExpr);
+  env["||"] = (env, l, rExpr) => l || evalExpr(env, rExpr);
+  env["?"] = (env, l, rExpr) => {
+    return Boolean(l) && { value: evalExpr(env, rExpr) };
   };
-  env["<"] = (l, rExpr) => {
-    return l < evalExpr(rExpr);
+  env[":"] = (env, l, rExpr) => {
+    if (typeof l === "object") return l.value;
+    if (l === false) return evalExpr(env, rExpr);
+    if (typeof l === "string") return { [l]: evalExpr(env, rExpr) };
   };
-  env["print"] = (l, rExpr) => {
-    log(l ?? evalExpr(rExpr));
+  env["=>"] = (env, l, rExpr) => ({ env, expr: rExpr });
+  env["length"] = (env, l, rExpr) => evalExpr(env, rExpr).length;
+  env["map"] = (env, l, rExpr) => l.map(
+    (v) => applyUserFunc(evalExpr(env, rExpr), undefined, v)
+  );
+  env["forEach"] = env["map"];
+  env["print"] = (env, l, rExpr) => {
+    log(l ?? evalExpr(env, rExpr));
     return undefined;
   };
-  env["&&"] = (l, rExpr) => {
-    return l && evalExpr(rExpr);
-  };
-  env["||"] = (l, rExpr) => {
-    return l || evalExpr(rExpr);
-  };
-  env["?"] = (l, rExpr) => {
-    return Boolean(l) && { value: evalExpr(rExpr) };
-  };
-  env[":"] = (l, rExpr) => {
-    if (typeof l === "object") return l.value;
-    if (l === false) return evalExpr(rExpr);
-    if (typeof l === "string") {
-      return { [l]: evalExpr(rExpr) };
-    }
-  };
-  env["length"] = (l, rExpr) => evalExpr(rExpr).length;
-  env["map"] = (l, rExpr) => l.map((v) => applyUserFunc(evalExpr(rExpr), undefined, v));
-  env["forEach"] = env["map"];
 }
-
-addGlobalVals();
 
 globalThis.log = console.log;
 
 export function evalCode(code) {
   const tokens = tokenize(code);
   const expr = parse(tokens);
-  return evalExpr(expr);
+  const env = {};
+  addGlobalVals(env);
+  return evalExpr(env, expr);
 }
