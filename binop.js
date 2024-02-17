@@ -8,11 +8,14 @@ function tokenize(str) {
     } else if (str[i] === ")") {
       tokens.push({ type: "GroupEnd" });
       i++;
-    } else if ((r = str.slice(i).match(/^\d+/))) {
+    } else if (r = str.slice(i).match(/^\d+/)) {
       tokens.push({ type: "Number", value: Number(r[0]) });
       i += r[0].length;
-    } else if ((r = str.slice(i).match(/^\w+|^[^\w\d\s()]+/))) {
-      tokens.push({ type: "String", value: r[0] });
+    } else if (r = str.slice(i).match(/^"([^"]*)"/)) {
+      tokens.push({ type: "String", value: r[1] });
+      i += r[0].length;
+    } else if (r = str.slice(i).match(/^\w+|^[^\w\d\s()"]+/)) {
+      tokens.push({ type: "Symbol", value: r[0] });
       i += r[0].length;
     } else ++i;
   }
@@ -50,6 +53,10 @@ function parseExpr(tokens, i) {
     i++;
     return { i, expr: { type: "String", value: token.value } };
   }
+  if (token.type === "Symbol") {
+    i++;
+    return { i, expr: { type: "Symbol", value: token.value } };
+  }
 }
 
 function parse(tokens) {
@@ -57,7 +64,6 @@ function parse(tokens) {
 }
 
 function applyFunc(func, l, rExpr) {
-  if (typeof func === "string") func = envVal(func);
   if (typeof func === "function") {
     return func(l, rExpr);
   }
@@ -84,6 +90,7 @@ function evalExpr(expr) {
   if (expr.type === "Sequence") return evalSequenceExpr(expr);
   if (expr.type === "Number") return expr.value;
   if (expr.type === "String") return expr.value;
+  if (expr.type === "Symbol") return envVal(expr.value);
   if (expr.type === "Null") return undefined;
 }
 
@@ -97,7 +104,8 @@ function envVal(name) {
   return ownerEnv(name)[name];
 }
 
-function addNativeFuncs() {
+function addGlobalVals() {
+  envStack[0]["@"] = null;
   envStack[0]["+"] = (l, rExpr) => {
     if (typeof l === "object") return { ...l, ...evalExpr(rExpr) };
     return l + evalExpr(rExpr);
@@ -126,7 +134,7 @@ function addNativeFuncs() {
     return env[name] = evalExpr(rExpr);
   };
   envStack[0]["$"] = (l, rExpr) => envVal(evalExpr(rExpr));
-  envStack[0]["."] = (l, rExpr) => l[evalExpr(rExpr)];
+  envStack[0]["."] = (l, rExpr) => l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(rExpr)];
   envStack[0][","] = (l, rExpr) => {
     const r = evalExpr(rExpr);
     if (l instanceof Array) return [...l, r];
@@ -171,7 +179,7 @@ function addNativeFuncs() {
   envStack[0]["forEach"] = envStack[0]["map"];
 }
 
-addNativeFuncs();
+addGlobalVals();
 
 globalThis.log = console.log;
 
