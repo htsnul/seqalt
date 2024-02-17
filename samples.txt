@@ -154,5 +154,20 @@ a.c, "d" = 5;
 
 #### Closure ####
 
+"createCounter" = (() => {
+  @var "c" = 0;
+  (() => {
+    "c" = (c + 1)
+  })
+});
 
+"c0" = (@createCounter());
+"c1" = (@createCounter());
 
+@print(@c0());
+@print(@c0());
+@print(@c1());
+@print(@c1());
+
+@print(@c0());
+@print(@c1());

@@ -64,8 +64,8 @@ function parse(tokens) {
 }
 
 function applyUserFunc(func, l, r) {
-  env = { parentEnv: env, args: { l, r } };
-  const val = evalExpr(func);
+  env = { parentEnv: func.env, args: { l, r } };
+  const val = evalExpr(func.expr);
   env = env.parentEnv;
   return val;
 }
@@ -109,6 +109,7 @@ function envVal(name) {
 
 function addGlobalVals() {
   env["@"] = null;
+  env["_"] = null;
   env["+"] = (l, rExpr) => {
     if (typeof l === "object") return { ...l, ...evalExpr(rExpr) };
     return l + evalExpr(rExpr);
@@ -144,7 +145,7 @@ function addGlobalVals() {
     return [l, r];
   };
   env["=>"] = (l, rExpr) => {
-    return rExpr;
+    return { env, expr: rExpr };
   }
   env["=="] = (l, rExpr) => {
     return l === evalExpr(rExpr);
