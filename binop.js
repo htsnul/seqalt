@@ -1,28 +1,28 @@
 function tokenize(str) {
   const tokens = [];
-  for (let i = 0; i < str.length; ) {
+  for (let i = 0; i < str.length;) {
     let r;
-    if (str[i] === "(") {
-      tokens.push({ type: "GroupStart" });
+    if (["(", "[", "{"].includes(str[i])) {
+      tokens.push({ type: "SequenceStart", string: str[i] });
       i++;
-    } else if (str[i] === ")") {
-      tokens.push({ type: "GroupEnd" });
+    } else if ([")", "]", "}"].includes(str[i])) {
+      tokens.push({ type: "SequenceEnd", string: str[i] });
       i++;
     } else if (r = str.slice(i).match(/^\d+/)) {
-      tokens.push({ type: "Number", value: Number(r[0]) });
+      tokens.push({ type: "Number", string: r[0] });
       i += r[0].length;
     } else if (r = str.slice(i).match(/^"((\\.|[^"])*)"/)) {
-      tokens.push({ type: "String", value: r[1].replace(/\\./g, (s) => s[1]) });
+      tokens.push({ type: "String", string: r[1].replace(/\\./g, (s) => s[1]) });
       i += r[0].length;
     } else if (r = str.slice(i).match(/^\w+|^[^\w\d\s()"]+/)) {
-      tokens.push({ type: "Symbol", value: r[0] });
+      tokens.push({ type: "Symbol", string: r[0] });
       i += r[0].length;
     } else ++i;
   }
   return tokens;
 }
 
-function parseSequence(tokens, i) {
+function parseSequence(tokens, i, isArray) {
   const exprs = [];
   while (i < tokens.length) {
     const result = parseExpr(tokens, i);
@@ -30,32 +30,32 @@ function parseSequence(tokens, i) {
     i = result.i;
     exprs.push(result.expr);
   }
-  return { i, expr: { type: "Sequence", exprs } };
+  return { i, expr: { type: "Sequence", exprs, isArray } };
 }
 
 function parseExpr(tokens, i) {
   if (i >= tokens.length) return;
   const token = tokens[i];
-  if (token.type === "GroupStart") {
+  if (token.type === "SequenceStart") {
     i++;
-    const result = parseSequence(tokens, i);
+    const result = parseSequence(tokens, i, token.string === "[");
     if (result) i = result.i;
     const expr = result?.expr ?? { type: "Null" };
-    console.assert(tokens[i].type === "GroupEnd");
+    console.assert(tokens[i].type === "SequenceEnd");
     i++;
     return { i, expr };
   }
   if (token.type === "Number") {
     i++;
-    return { i, expr: { type: "Number", value: token.value } };
+    return { i, expr: { type: "Number", value: Number(token.string) } };
   }
   if (token.type === "String") {
     i++;
-    return { i, expr: { type: "String", value: token.value } };
+    return { i, expr: { type: "String", value: token.string } };
   }
   if (token.type === "Symbol") {
     i++;
-    return { i, expr: { type: "Symbol", value: token.value } };
+    return { i, expr: { type: "Symbol", value: token.string } };
   }
 }
 
@@ -76,8 +76,9 @@ function applyFunc(func, l, rExpr) {
 }
 
 function evalSequenceExpr(expr) {
-  if (expr.exprs.length === 0) return undefined;
+  if (expr.exprs.length === 0) return expr.isArray ? [] : undefined;
   let val = evalExpr(expr.exprs[0]);
+  if (expr.isArray) val = [val];
   for (let i = 1; i < expr.exprs.length;) {
     const func = evalExpr(expr.exprs[i++]);
     const rExpr = expr.exprs[i++] ?? { type: "Null" };
@@ -167,6 +168,9 @@ function addGlobalVals() {
       return { [l]: evalExpr(rExpr) };
     }
   };
+  envStack[0]["length"] = (l, rExpr) => {
+    return evalExpr(rExpr).length;
+  }
   envStack[0]["map"] = (l, rExpr) => {
     const r = evalExpr(rExpr);
     return l.map((v) => {
