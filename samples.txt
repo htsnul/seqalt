@@ -25,25 +25,22 @@
 
 #### User function ####
 
-"printSum" = (() => {
+"printSum" = (("v0", "v1") => {
   @print(
-    (args.r.0) + " + " + (args.r.1) + " = " +
-    ((args.r.0) + (args.r.1))
+    v0 + " + " + v1 + " = " +
+    (v0 + v1)
   );
 });
 
 @printSum(4, 5);
 @printSum(6, 7);
 
-"printSumLr" = (() => {
-  @print(
-    (args.l) + " + " + (args.r) + " = " +
-    ((args.l) + (args.r))
-  );
+"plus" = (() => {
+  (args.l) + (args.r)
 });
 
-(1)printSumLr(2);
-(3)printSumLr(4);
+@print((1)plus(2));
+@print((3)plus(4)plus(5));
 
 #### Array ####
 
@@ -69,12 +66,11 @@
 
 #### Fibonacci ####
 
-"fib" = (() => {
-  ((args.r) < 2) ? {
-    args.r
+"fib" = (("val") => {
+  (val < 2) ? {
+    val
   } : {
-    (@fib(args.r - 1)) +
-    (@fib(args.r - 2))
+    (@fib(val - 1)) + (@fib(val - 2))
   }
 });
 
@@ -99,21 +95,21 @@
 "a" = 1;
 @print(a);
 
-@(() => (
+@(() => {
   @print(a);
   "a" = 4;
   @print(a);
-))();
+})();
 @print(a);
 
 "b" = 1;
 @print(b);
 
-@(() => (
+@(() => {
   @print(b);
   @var "b" = 4;
   @print(b);
-))();
+})();
 @print(b);
 
 #### Passing functions as argments ####
@@ -123,21 +119,21 @@
 ));
 
 0 callLOfR([
-  (() => (
+  (() => {
     @print("a");
-  )),
-  (() => (
+  }),
+  (() => {
     @print("b");
-  ))
+  })
 ]);
 
 1 callLOfR([
-  (() => (
+  (() => {
     @print("c");
-  )),
-  (() => (
+  }),
+  (() => {
     @print("d");
-  ))
+  })
 ]);
 
 #### Function array ####
@@ -154,17 +150,19 @@
 
 "nums" = (
   [1, 2, 3, 4]
-  map(() => (args.r * 2))
-  map(() => (args.r + 1))
+  map(("v") => (v * 2))
+  map(("v") => (v + 1))
 );
-(nums)forEach(() => (@print(args.r)));
+(nums)forEach(("val") => (@print(val)));
 
 #### Closure ####
 
 "createCounter" = (() => {
-  @var "c" = 0;
+  @var "count" = 0;
   (() => {
-    "c" = (c + 1)
+    @var "result" = count;
+    "count" = (count + 1);
+    result
   })
 });
 
