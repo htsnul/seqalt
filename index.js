@@ -1,4 +1,4 @@
-import { evalCode } from "./binop.js"
+import { evalCode } from "./seqalt.js"
 
 onload = async () => {
   document.body.innerHTML = `
