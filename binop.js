@@ -11,8 +11,8 @@ function tokenize(str) {
     } else if (r = str.slice(i).match(/^\d+/)) {
       tokens.push({ type: "Number", value: Number(r[0]) });
       i += r[0].length;
-    } else if (r = str.slice(i).match(/^"([^"]*)"/)) {
-      tokens.push({ type: "String", value: r[1] });
+    } else if (r = str.slice(i).match(/^"((\\.|[^"])*)"/)) {
+      tokens.push({ type: "String", value: r[1].replace(/\\./g, (s) => s[1]) });
       i += r[0].length;
     } else if (r = str.slice(i).match(/^\w+|^[^\w\d\s()"]+/)) {
       tokens.push({ type: "Symbol", value: r[0] });
