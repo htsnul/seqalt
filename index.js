@@ -46,7 +46,12 @@ onload = async () => {
     document.querySelector(".log").innerHTML = "";
     document.querySelector(".result").innerHTML = "";
     const code = document.querySelector("textarea").value;
-    const result = evalCode(code);
-    document.querySelector(".result").innerHTML += result;
+    try {
+      const result = evalCode(code, log);
+      document.querySelector(".result").innerHTML += result;
+    } catch (e) {
+      document.querySelector(".result").innerHTML += e.message;
+      throw e;
+    }
   };
 };

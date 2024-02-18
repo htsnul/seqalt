@@ -51,7 +51,7 @@ function parseExpr(tokens, i) {
 function parse(tokens) { return parseSequence(tokens, 0).expr; }
 
 function callUserFunc(func, l, r) {
-  const env = { parentEnv: func.env, args: { l, r } };
+  const env = { _parentEnv: func.env, args: { l, r } };
   if (Array.isArray(r)) func.argNames.forEach((name, i) => env[name] = r[i]);
   else env[func.argNames[0]] = r;
   const val = evalExpr(env, func.expr);
@@ -84,17 +84,14 @@ function evalExpr(env, expr) {
 }
 
 function ownerEnv(env, name) {
-  for (let e = env; e; e = e.parentEnv) {
-    if (name in e) return e;
-  }
+  return (!env || name in env) ? env : ownerEnv(env._parentEnv, name);
 }
 
 function envVal(env, name) { return ownerEnv(env, name)[name]; }
 
 function addGlobalVals(env) {
   env["@"] = null;
-  env["_"] = null;
-  env["#"] = (env, l, rExpr) => l;
+  env["rem"] = (env, l, rExpr) => l;
   env[";"] = (env, l, rExpr) => evalExpr(env, rExpr);
   env["+"] = (env, l, rExpr) => l + evalExpr(env, rExpr);
   env["-"] = (env, l, rExpr) => l - evalExpr(env, rExpr);
@@ -129,29 +126,25 @@ function addGlobalVals(env) {
     if (typeof l === "object" && typeof r === "object") return { ...l, ...r };
     return [l, r];
   };
-  env["&&"] = (env, l, rExpr) => l && evalExpr(env, rExpr);
-  env["||"] = (env, l, rExpr) => l || evalExpr(env, rExpr);
-  env["?"] = (env, l, rExpr) => {
-    return Boolean(l) && { value: evalExpr(env, rExpr) };
-  };
+  env["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
+  env["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
+  env["?"] = (env, l, rExpr) => (Boolean(l) && { value: evalExpr(env, rExpr) });
   env[":"] = (env, l, rExpr) => {
     if (typeof l === "object") return l.value;
     if (l === false) return evalExpr(env, rExpr);
     if (typeof l === "string") return { [l]: evalExpr(env, rExpr) };
   };
-  env["=>"] = (env, l, rExpr) => {
-    const argNames = Array.isArray(l) ? l : [l];
-    return { env, argNames, expr: rExpr };
-  };
-  env["length"] = (env, l, rExpr) => evalExpr(env, rExpr).length;
-  env["map"] = (env, l, rExpr) => l.map(
-    (v) => callUserFunc(evalExpr(env, rExpr), undefined, v)
+  env["=>"] = (env, l, rExpr) => (
+    { env, argNames: (Array.isArray(l) ? l : [l]), expr: rExpr }
   );
-  env["forEach"] = env["map"];
-  env["print"] = (env, l, rExpr) => {
-    log(l ?? evalExpr(env, rExpr));
-    return undefined;
+  env["range"] = (env, l, rExpr) => [...Array(evalExpr(env, rExpr))].map((_, i) => i);
+  env["length"] = (env, l, rExpr) => evalExpr(env, rExpr).length;
+  env["map"] = (env, l, rExpr) => {
+    const func = evalExpr(env, rExpr);
+    return l.map((v) => callUserFunc(func, undefined, v));
   };
+  env["forEach"] = env["map"];
+  env["print"] = (env, l, rExpr) => log(evalExpr(env, rExpr));
 }
 
 globalThis.log = console.log;

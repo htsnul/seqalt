@@ -8,13 +8,23 @@
 @print((5 + 6) - (1 + 2) + (3 * 4));
 @print((5 + 6) - (1 + 2) + 3 * 4);
 
-#### Condtions ####
+#### Conditons ####
 
-0 && (@print(10));
-1 && (@print(11));
-1 && {
-  @print(12);
+(3 < 5) && {
+  @print("3 < 5")
 };
+
+(3 > 5) ? {
+  @print("3 > 5")
+} : {
+  @print("Not 3 > 5")
+};
+
+"x" = 3;
+
+((x == 2) || (x == 3)) && {
+  @print("x is 2 or 3.")
+}
 
 #### Variable ####
 
@@ -44,25 +54,37 @@
 
 #### Array ####
 
-"nums0" = [[0, 1, 2], 3, 4, 5];
+"nums" = [5, 6, 7, 8];
+
+@print(@length(nums));
+@print(nums.1);
+@print(nums.2);
+"i" = 3;
+@print(nums.(i));
+
+[nums, 2] = 17;
+[nums, i] = 18;
+@print(nums.2);
+@print(nums.(i));
+
+"nested" = [[0, 1, 2], 3, 4, 5];
+
+@print(@length(nested));
+@print(@length(nested.0));
+@print(nested.0.0);
+@print(nested.0.1);
+@print(nested.0.2);
+
+[(nested.0), 1] = 8;
+[nested, 2] = 9;
+@print(nested.0.1);
+@print(nested.2);
+
 "nums1" = [(0, 1, 2), 3, 4 ,5];
 "nums2" = ((0, 1, 2), 3, 4 ,5);
 
-@print(@length(nums0));
 @print(@length(nums1));
 @print(@length(nums2));
-
-#### Ternary operator ####
-
-@print(0 ? 3 : 4);
-@print(1 ? 3 : 4);
-@print(0 ? 0 : 5);
-@print(1 ? 0 : 5);
-
-@print(0 && 3 || 4);
-@print(1 && 3 || 4);
-@print(0 && 0 || 5);
-@print(1 && 0 || 5);
 
 #### Fibonacci ####
 
@@ -146,7 +168,11 @@
 @(ary.0)();
 @(ary.1)();
 
-#### Array mapping ####
+#### Higher order functions ####
+
+@range(3)forEach(("i") => {
+  @print(i);
+});
 
 "nums" = (
   [1, 2, 3, 4]
