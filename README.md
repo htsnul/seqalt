@@ -283,24 +283,19 @@ function envVal(env, name) { return ownerEnv(env, name)[name]; }
 
 変数を参照したときは、新しい環境から順に探索される。
 
-変数に値を代入するのは、ネイティブ関数 `=`、
+変数への値の代入は、ネイティブ関数 `=` の、
 
 ```
   env["="] = (env, l, rExpr) => {
-    if (l instanceof Array) {
-      console.assert(l.length === 2);
-      const [obj, key] = l;
-      return obj[key] = evalExpr(env, rExpr);
-    }
+    ...
     const name = l;
     const e = ownerEnv(env, name) ?? env;
     return e[name] = evalExpr(env, rExpr);
   };
 ```
 
-を使う。
+部分で行われる。
 
-`if` の部分は、配列や辞書を使った場合の処理なので、今は気にせずそれ以外の処理を見ると、
 その名前が所属する環境を探し、そこに引数左の値の名前で、引数右の値を代入している。
 所属する環境がなければ、ルート環境に代入する。
 引数左なので、`"x" = 3` とシンボルではなく文字列として指定する仕様とせざるを得ないが、
@@ -466,9 +461,10 @@ function callFunc(env, func, l, rExpr) {
 
 部分により、引数右に指定された文字列を、追加予定キー `__tmpKey` として保持する。
 そこに、`: 2` のように、ネイティブ関数 `:` が適用されると、
-先ほどの `if (l?.__isDicUnderConstruction)` 条件の処理により、辞書へのキーバリュー追加が完了する。
+ネイティブ関数 `:` の `if (l?.__isDicUnderConstruction)` 条件の処理により、辞書へのキーバリュー追加が完了する。
 
 ネイティブ関数 `,` は配列操作にも使われるため区別のために、`__isDicUnderConstruction` が必要になっている。
+
 括弧を `}` で閉じ辞書が完成したときは、`evalSequenceExpr` の、
 
 ```
@@ -498,7 +494,7 @@ function callFunc(env, func, l, rExpr) {
 
 ### 配列、辞書への代入
 
-配列、辞書それぞれの代入では、ネイティブ関数 `=`、
+配列、辞書それぞれの代入は、ネイティブ関数 `=` の
 
 ```
   env["="] = (env, l, rExpr) => {
@@ -507,13 +503,11 @@ function callFunc(env, func, l, rExpr) {
       const [obj, key] = l;
       return obj[key] = evalExpr(env, rExpr);
     }
-    const name = l;
-    const e = ownerEnv(env, name) ?? env;
-    return e[name] = evalExpr(env, rExpr);
+    ...
   };
 ```
 
-の `if` が書かれた行で行われる。
+部分で行われる。
 
 配列、辞書への代入では、所属する辞書、配列自体も必要となるため、
 左引数では、所属するオブジェクトとキー名を配列長2の配列で受け取る。
@@ -591,9 +585,7 @@ function callFunc(env, func, l, rExpr) {
 実行が行われないようにエクスプレッションの評価を行わないようにする必要がある。
 
 三項演算子に見えるものは実際に三項演算子なわけではなく、
-ネイティブ関数 `?` の呼び出し結果を `:` の引数左で受け取ることでそれらしく動くようにしている。
-
-最後の `"string"` 型の場合は、辞書の実装で使われているものなのでここでの条件分岐には関係ない。
+ネイティブ関数 `?` の呼び出し結果をネイティブ関数 `:` の引数左で受け取ることでそれらしく動くようにしている。
 
 ### 高階関数
 
