@@ -20,38 +20,35 @@ function tokenize(str) {
   return tokens;
 }
 
-function parseSequence(tokens, i, isArray) {
+function parseSequence(tokens, i, subtype) {
   const exprs = [];
   while (i < tokens.length && tokens[i].type !== "SequenceEnd") {
     const result = parseExpr(tokens, i);
     i = result.i;
     exprs.push(result.expr);
   }
-  return { i, expr: { type: "Sequence", exprs, isArray } };
+  return { i, expr: { type: "Sequence", subtype, exprs } };
 }
 
 function parseExpr(tokens, i) {
   const token = tokens[i];
   if (token.type === "SequenceStart") {
-    const result = parseSequence(tokens, i + 1, token.string === "[");
+    const result = parseSequence(tokens, i + 1, token.string);
     console.assert(tokens[result.i].type === "SequenceEnd");
     return { i: result.i + 1, expr: result.expr };
   }
-  if (token.type === "Number") {
+  if (token.type === "Number")
     return { i: i + 1, expr: { type: "Number", value: Number(token.string) } };
-  }
-  if (token.type === "String") {
+  if (token.type === "String")
     return { i: i + 1, expr: { type: "String", value: token.string } };
-  }
-  if (token.type === "Symbol") {
+  if (token.type === "Symbol")
     return { i: i + 1, expr: { type: "Symbol", value: token.string } };
-  }
 }
 
 function parse(tokens) { return parseSequence(tokens, 0).expr; }
 
 function callUserFunc(func, l, r) {
-  const env = { _parentEnv: func.env, args: { l, r } };
+  const env = { __parentEnv: func.env, args: { l, r } };
   if (Array.isArray(r)) func.argNames.forEach((name, i) => env[name] = r[i]);
   else env[func.argNames[0]] = r;
   const val = evalExpr(env, func.expr);
@@ -64,14 +61,15 @@ function callFunc(env, func, l, rExpr) {
 }
 
 function evalSequenceExpr(env, expr) {
-  if (expr.exprs.length === 0) return expr.isArray ? [] : undefined;
+  if (expr.exprs.length === 0) return expr.subtype === "[" ? [] : undefined;
   let val = evalExpr(env, expr.exprs[0]);
-  if (expr.isArray) val = [val];
+  if (expr.subtype === "[") val = [val];
   for (let i = 1; i < expr.exprs.length;) {
     const func = evalExpr(env, expr.exprs[i++]);
     const rExpr = expr.exprs[i++] ?? { type: "Null" };
     val = callFunc(env, func, val, rExpr);
   }
+  if (expr.subtype === "{" && typeof val === "object") delete val.__isDicUnderConstruction;
   return val;
 }
 
@@ -84,7 +82,7 @@ function evalExpr(env, expr) {
 }
 
 function ownerEnv(env, name) {
-  return (!env || name in env) ? env : ownerEnv(env._parentEnv, name);
+  return (!env || name in env) ? env : ownerEnv(env.__parentEnv, name);
 }
 
 function envVal(env, name) { return ownerEnv(env, name)[name]; }
@@ -121,18 +119,22 @@ function addGlobalVals(env) {
     return l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(env, rExpr)];
   };
   env[","] = (env, l, rExpr) => {
-    const r = evalExpr(env, rExpr);
-    if (l instanceof Array) return [...l, r];
-    if (typeof l === "object" && typeof r === "object") return { ...l, ...r };
-    return [l, r];
+    if (l?.__isDicUnderConstruction) return { ...l, __tmpKey: evalExpr(env, rExpr) };
+    if (l instanceof Array) return [...l, evalExpr(env, rExpr)];
+    return [l, evalExpr(env, rExpr)];
   };
   env["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
   env["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
-  env["?"] = (env, l, rExpr) => (Boolean(l) && { value: evalExpr(env, rExpr) });
+  env["?"] = (env, l, rExpr) => (Boolean(l) && { __valWhenTrue: evalExpr(env, rExpr) });
   env[":"] = (env, l, rExpr) => {
-    if (typeof l === "object") return l.value;
     if (l === false) return evalExpr(env, rExpr);
-    if (typeof l === "string") return { [l]: evalExpr(env, rExpr) };
+    if (typeof l === "object" && "__valWhenTrue" in l) return l.__valWhenTrue;
+    if (typeof l === "string") return { __isDicUnderConstruction: true, [l]: evalExpr(env, rExpr) };
+    if (l?.__isDicUnderConstruction) {
+      const key = l.__tmpKey;
+      delete l.__tmpKey;
+      return { ...l, [key]: evalExpr(env, rExpr) };
+    }
   };
   env["=>"] = (env, l, rExpr) => (
     { env, argNames: (Array.isArray(l) ? l : [l]), expr: rExpr }

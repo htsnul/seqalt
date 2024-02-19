@@ -179,32 +179,29 @@ function tokenize(str) {
 ## トークン配列を構文木に変換
 
 ```
-function parseSequence(tokens, i, isArray) {
+function parseSequence(tokens, i, subtype) {
   const exprs = [];
   while (i < tokens.length && tokens[i].type !== "SequenceEnd") {
     const result = parseExpr(tokens, i);
     i = result.i;
     exprs.push(result.expr);
   }
-  return { i, expr: { type: "Sequence", exprs, isArray } };
+  return { i, expr: { type: "Sequence", subtype, exprs } };
 }
 
 function parseExpr(tokens, i) {
   const token = tokens[i];
   if (token.type === "SequenceStart") {
-    const result = parseSequence(tokens, i + 1, token.string === "[");
+    const result = parseSequence(tokens, i + 1, token.string);
     console.assert(tokens[result.i].type === "SequenceEnd");
     return { i: result.i + 1, expr: result.expr };
   }
-  if (token.type === "Number") {
+  if (token.type === "Number")
     return { i: i + 1, expr: { type: "Number", value: Number(token.string) } };
-  }
-  if (token.type === "String") {
+  if (token.type === "String")
     return { i: i + 1, expr: { type: "String", value: token.string } };
-  }
-  if (token.type === "Symbol") {
+  if (token.type === "Symbol")
     return { i: i + 1, expr: { type: "Symbol", value: token.string } };
-  }
 }
 
 function parse(tokens) { return parseSequence(tokens, 0).expr; }
@@ -222,14 +219,15 @@ function parse(tokens) { return parseSequence(tokens, 0).expr; }
 
 ```
 function evalSequenceExpr(env, expr) {
-  if (expr.exprs.length === 0) return expr.isArray ? [] : undefined;
+  if (expr.exprs.length === 0) return expr.subtype === "[" ? [] : undefined;
   let val = evalExpr(env, expr.exprs[0]);
-  if (expr.isArray) val = [val];
+  if (expr.subtype === "[") val = [val];
   for (let i = 1; i < expr.exprs.length;) {
     const func = evalExpr(env, expr.exprs[i++]);
     const rExpr = expr.exprs[i++] ?? { type: "Null" };
     val = callFunc(env, func, val, rExpr);
   }
+  if (expr.subtype === "{" && typeof val === "object") delete val.__isDicUnderConstruction;
   return val;
 }
 
@@ -266,22 +264,22 @@ function evalExpr(env, expr) {
 なので、`3 + 5 * 4` は `32` になってしまう、これを防ぐために `3 + (5 * 4)` と書く必要がある。
 逆に考えれば、優先度を覚えたり調べたりする必要がない。括弧は多くなってしまうが。
 
-`isArray` 部分は、配列で後に説明する。
+括弧の種類 `subtype` に関連した特殊処理があるが、後に説明する。
 
-シンボルについて。シンボルは評価時に環境変数の探索を行い、対応する値になる。
+シンボルについて。シンボルは評価時に `envVal` により環境変数の対応する値になる。
 
 ### 環境変数
 
 ```
 function ownerEnv(env, name) {
-  return (!env || name in env) ? env : ownerEnv(env._parentEnv, name);
+  return (!env || name in env) ? env : ownerEnv(env.__parentEnv, name);
 }
 
 function envVal(env, name) { return ownerEnv(env, name)[name]; }
 ```
 
 環境変数は、ユーザ関数が実行されるたびに新しい環境を生成し、
-旧環境を `_parentEnv` で再帰で辿る。これによりローカル変数が実現できる。
+旧環境を `__parentEnv` で再帰で辿る。これによりローカル変数が実現できる。
 
 変数を参照したときは、新しい環境から順に探索される。
 
@@ -354,7 +352,7 @@ function envVal(env, name) { return ownerEnv(env, name)[name]; }
 
 ```
 function callUserFunc(func, l, r) {
-  const env = { _parentEnv: func.env, args: { l, r } };
+  const env = { __parentEnv: func.env, args: { l, r } };
   if (Array.isArray(r)) func.argNames.forEach((name, i) => env[name] = r[i]);
   else env[func.argNames[0]] = r;
   const val = evalExpr(env, func.expr);
@@ -379,7 +377,7 @@ function callFunc(env, func, l, rExpr) {
 右引数に限って、引数名としてネイティブ関数 `=>` 実行時に保持された値があれば、
 それらの値でも参照できるように変数追加している。
 
-保持しておいたネイティブ関数 `=>` 実行時の環境を `_parentEnv` として設定している。
+保持しておいたネイティブ関数 `=>` 実行時の環境を `__parentEnv` として設定している。
 繰り返しになるが、これによりクロージャーが可能になる。
 
 ## 配列と辞書
@@ -390,14 +388,13 @@ function callFunc(env, func, l, rExpr) {
 
 ```
   env[","] = (env, l, rExpr) => {
-    const r = evalExpr(env, rExpr);
-    if (l instanceof Array) return [...l, r];
-    if (typeof l === "object" && typeof r === "object") return { ...l, ...r };
-    return [l, r];
+    if (l?.__isDicUnderConstruction) return { ...l, __tmpKey: evalExpr(env, rExpr) };
+    if (l instanceof Array) return [...l, evalExpr(env, rExpr)];
+    return [l, evalExpr(env, rExpr)];
   };
 ```
 
-で実現している。`object` が含まれている行は辞書のための処理でここでは関係ない。
+で実現している。`__isDicUnderConstruction` が含まれている行は辞書のための処理で後に説明する。
 
 `1, 2` とすると、上記ネイティブ関数 `,` により、1、2の配列になる。
 引数左が配列に対して、上記ネイティブ関数 `,` を呼び出すと、配列に値を追加していく。
@@ -406,17 +403,16 @@ function callFunc(env, func, l, rExpr) {
 これでおおよそ任意の配列が作れるのだが、要素数0、要素数1、最初の要素自体が配列の配列、
 はこの方法では生成することができない。
 
-なので、`[`、`]` で表現されたシーケンスの評価には `isArray` が渡るようにし、
 先述のシーケンスの評価 `evalSequenceExpr` で、
 
 ```
-  if (expr.exprs.length === 0) return expr.isArray ? [] : undefined;
+  if (expr.exprs.length === 0) return expr.subtype === "[" ? [] : undefined;
   let val = evalExpr(env, expr.exprs[0]);
-  if (expr.isArray) val = [val];
+  if (expr.subtype === "[") val = [val];
 ```
 
-と、空の場合には空配列、またそうでない場合に最初の要素を必ず配列に入れる、
-という特殊処理を追加している。
+と、`subtype` が `[` の場合には特殊処理を追加している。
+シーケンスが空の場合には空配列、またそうでない場合に最初の要素を必ず配列に入れる。
 
 配列を参照するには、ネイティブ関数 `.`、
 
@@ -426,7 +422,7 @@ function callFunc(env, func, l, rExpr) {
   };
 ```
 
-を使う。`type` が `Symbol` の場合は辞書を想定しているのでここでは直接は関係ない。
+を使う。`type` が `Symbol` の場合は辞書を想定した処理なのでここでは直接は関係ない。
 引数左を配列として、引数右のインデクスで参照する。
 
 ```
@@ -447,22 +443,39 @@ function callFunc(env, func, l, rExpr) {
 
 ```
   env[":"] = (env, l, rExpr) => {
-    if (typeof l === "object") return l.value;
-    if (l === false) return evalExpr(env, rExpr);
-    if (typeof l === "string") return { [l]: evalExpr(env, rExpr) };
+    ...
+    if (typeof l === "string") return { __isDicUnderConstruction: true, [l]: evalExpr(env, rExpr) };
+    if (l?.__isDicUnderConstruction) {
+      const key = l.__tmpKey;
+      delete l.__tmpKey;
+      return { ...l, [key]: evalExpr(env, rExpr) };
+    }
   };
 ```
 
 と、先ほどのネイティブ関数 `,` で実現する。
-条件分岐にも利用されるのでここでは最終行のみが関係する。
-左引数をキー、右引数をバリューとした、キーバリューを1つのみ含む辞書を生成する。
 
-これを先ほどの `,` で辞書同士を結合できるようにしているので、
+`"a": 1` のような、左引数が文字列の場合、左引数をキー、右引数をバリューとした、キーバリューを1つのみ含む辞書を生成する。
+このとき、`__isDicUnderConstruction` で構築中の辞書であることを後処理のため分かるようにしている。
+
+ここに、新たに、`, "b"` のように記述を続けると、先ほどのネイティブ関数 `,` の、
 
 ```
-"a" = { { "b": 2 }, { "c": { "d": 3 } } };
+    if (l?.__isDicUnderConstruction) return { ...l, __tmpKey: evalExpr(env, rExpr) };
 ```
-のように生成することができる。
+
+部分により、引数右に指定された文字列を、追加予定キー `__tmpKey` として保持する。
+そこに、`: 2` のように、ネイティブ関数 `:` が適用されると、
+先ほどの `if (l?.__isDicUnderConstruction)` 条件の処理により、辞書へのキーバリュー追加が完了する。
+
+ネイティブ関数 `,` は配列操作にも使われるため区別のために、`__isDicUnderConstruction` が必要になっている。
+括弧を `}` で閉じ辞書が完成したときは、`evalSequenceExpr` の、
+
+```
+  if (expr.subtype === "{" && typeof val === "object") delete val.__isDicUnderConstruction;
+```
+
+で `__isDicUnderConstruction` を削除し、その後は配列生成、配列追加にも適用可能になる。
 
 辞書を参照するには、配列でも登場したネイティブ関数 `.`、
 
@@ -541,21 +554,20 @@ function callFunc(env, func, l, rExpr) {
 
 ### 条件分岐
 
-条件分岐は、ネイティブ関数で実現している。
+条件分岐は、以下のネイティブ関数で実現している。
 
 ```
   env["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
   env["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
-  env["?"] = (env, l, rExpr) => (Boolean(l) && { value: evalExpr(env, rExpr) });
+  env["?"] = (env, l, rExpr) => (Boolean(l) && { __valWhenTrue: evalExpr(env, rExpr) });
   env[":"] = (env, l, rExpr) => {
-    if (typeof l === "object") return l.value;
     if (l === false) return evalExpr(env, rExpr);
-    if (typeof l === "string") return { [l]: evalExpr(env, rExpr) };
+    if (typeof l === "object" && "__valWhenTrue" in l) return l.__valWhenTrue;
+    ...
   };
 ```
 
 `if` などは用意していないが、これらがあれば同等のことができる。
-やってはいないがダミー関数 `if` などを用意すれば見た目だけは近づけられるかもしれない。
 
 ```
 (3 < 5) && {
