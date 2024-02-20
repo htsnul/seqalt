@@ -382,7 +382,7 @@ function callFunc(env, func, l, rExpr) {
 ```
   rootEnv[","] = (env, l, rExpr) => {
     ...
-    if (l instanceof Array) return [...l, evalExpr(env, rExpr)];
+    if (Array.isArray(l)) return [...l, evalExpr(env, rExpr)];
     return [l, evalExpr(env, rExpr)];
   };
 ```
@@ -504,7 +504,7 @@ function callFunc(env, func, l, rExpr) {
 
 ```
   rootEnv["="] = (env, l, rExpr) => {
-    if (l instanceof Array) {
+    if (Array.isArray(l)) {
       console.assert(l.length === 2);
       const [obj, key] = l;
       return obj[key] = evalExpr(env, rExpr);
