@@ -134,9 +134,7 @@ Hello Worldは、
 export function evalCode(code) {
   const tokens = tokenize(code);
   const expr = parse(tokens);
-  const env = {};
-  addGlobalVals(env);
-  return evalExpr(env, expr);
+  return evalExpr(createRootEnv(), expr);
 }
 ```
 
@@ -286,10 +284,10 @@ function envVal(env, name) { return ownerEnv(env, name)[name]; }
 変数への値の代入は、ネイティブ関数 `=` の、
 
 ```
-  env["="] = (env, l, rExpr) => {
+  rootEnv["="] = (env, l, rExpr) => {
     ...
     const name = l;
-    const e = ownerEnv(env, name) ?? env;
+    const e = ownerEnv(env, name) ?? rootEnv;
     return e[name] = evalExpr(env, rExpr);
   };
 ```
@@ -304,7 +302,7 @@ function envVal(env, name) { return ownerEnv(env, name)[name]; }
 ローカル変数は、ネイティブ関数 `var`、
 
 ```
-  env["var"] = (env, l, rExpr) => {
+  rootEnv["var"] = (env, l, rExpr) => {
     const name = evalExpr(env, rExpr);
     env[name] = null;
     return name;
@@ -321,7 +319,7 @@ function envVal(env, name) { return ownerEnv(env, name)[name]; }
 ユーザー関数は、ネイティブ関数 `=>`、
 
 ```
-  env["=>"] = (env, l, rExpr) => (
+  rootEnv["=>"] = (env, l, rExpr) => (
     { env, argNames: (Array.isArray(l) ? l : [l]), expr: rExpr }
   );
 ```
@@ -382,7 +380,7 @@ function callFunc(env, func, l, rExpr) {
 配列の生成は、ネイティブ関数 `,`、
 
 ```
-  env[","] = (env, l, rExpr) => {
+  rootEnv[","] = (env, l, rExpr) => {
     if (l?.__isDicUnderConstruction) return { ...l, __tmpKey: evalExpr(env, rExpr) };
     if (l instanceof Array) return [...l, evalExpr(env, rExpr)];
     return [l, evalExpr(env, rExpr)];
@@ -412,7 +410,7 @@ function callFunc(env, func, l, rExpr) {
 配列を参照するには、ネイティブ関数 `.`、
 
 ```
-  env["."] = (env, l, rExpr) => {
+  rootEnv["."] = (env, l, rExpr) => {
     return l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(env, rExpr)];
   };
 ```
@@ -437,7 +435,7 @@ function callFunc(env, func, l, rExpr) {
 辞書の生成は、ネイティブ関数 `:`、
 
 ```
-  env[":"] = (env, l, rExpr) => {
+  rootEnv[":"] = (env, l, rExpr) => {
     ...
     if (typeof l === "string") return { __isDicUnderConstruction: true, [l]: evalExpr(env, rExpr) };
     if (l?.__isDicUnderConstruction) {
@@ -476,7 +474,7 @@ function callFunc(env, func, l, rExpr) {
 辞書を参照するには、配列でも登場したネイティブ関数 `.`、
 
 ```
-  env["."] = (env, l, rExpr) => {
+  rootEnv["."] = (env, l, rExpr) => {
     return l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(env, rExpr)];
   };
 ```
@@ -497,7 +495,7 @@ function callFunc(env, func, l, rExpr) {
 配列、辞書それぞれの代入は、ネイティブ関数 `=` の
 
 ```
-  env["="] = (env, l, rExpr) => {
+  rootEnv["="] = (env, l, rExpr) => {
     if (l instanceof Array) {
       console.assert(l.length === 2);
       const [obj, key] = l;
@@ -535,7 +533,7 @@ function callFunc(env, func, l, rExpr) {
 ### コメント
 
 ```
-  env["rem"] = (env, l, rExpr) => l;
+  rootEnv["rem"] = (env, l, rExpr) => l;
 ```
 
 右引数を評価せずに無視するだけの関数。これを使って
@@ -551,10 +549,10 @@ function callFunc(env, func, l, rExpr) {
 条件分岐は、以下のネイティブ関数で実現している。
 
 ```
-  env["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
-  env["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
-  env["?"] = (env, l, rExpr) => (Boolean(l) && { __valWhenTrue: evalExpr(env, rExpr) });
-  env[":"] = (env, l, rExpr) => {
+  rootEnv["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
+  rootEnv["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
+  rootEnv["?"] = (env, l, rExpr) => (Boolean(l) && { __valWhenTrue: evalExpr(env, rExpr) });
+  rootEnv[":"] = (env, l, rExpr) => {
     if (l === false) return evalExpr(env, rExpr);
     if (typeof l === "object" && "__valWhenTrue" in l) return l.__valWhenTrue;
     ...
@@ -592,7 +590,7 @@ function callFunc(env, func, l, rExpr) {
 ネイティブ関数 `map`、
 
 ```
-  env["map"] = (env, l, rExpr) => {
+  rootEnv["map"] = (env, l, rExpr) => {
     const func = evalExpr(env, rExpr);
     return l.map((v) => callUserFunc(func, undefined, v));
   };

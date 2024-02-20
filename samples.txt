@@ -119,12 +119,12 @@
 
 @(() => {
   @print(a);
-  "a" = 4;
+  "a" = 2;
   @print(a);
 })();
 @print(a);
 
-"b" = 1;
+"b" = 3;
 @print(b);
 
 @(() => {
@@ -133,6 +133,12 @@
   @print(b);
 })();
 @print(b);
+
+@(() => {
+  "c" = 5;
+  @print(c);
+})();
+@print(c);
 
 #### Passing functions as argments ####
 

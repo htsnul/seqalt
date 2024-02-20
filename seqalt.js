@@ -87,46 +87,47 @@ function ownerEnv(env, name) {
 
 function envVal(env, name) { return ownerEnv(env, name)[name]; }
 
-function addGlobalVals(env) {
-  env["@"] = null;
-  env["rem"] = (env, l, rExpr) => l;
-  env[";"] = (env, l, rExpr) => evalExpr(env, rExpr);
-  env["+"] = (env, l, rExpr) => l + evalExpr(env, rExpr);
-  env["-"] = (env, l, rExpr) => l - evalExpr(env, rExpr);
-  env["*"] = (env, l, rExpr) => l * evalExpr(env, rExpr);
-  env["=="] = (env, l, rExpr) => l === evalExpr(env, rExpr);
-  env["!="] = (env, l, rExpr) => l !== evalExpr(env, rExpr);
-  env["<"] = (env, l, rExpr) => l < evalExpr(env, rExpr);
-  env["<="] = (env, l, rExpr) => l <= evalExpr(env, rExpr);
-  env[">"] = (env, l, rExpr) => l > evalExpr(env, rExpr);
-  env[">="] = (env, l, rExpr) => l >= evalExpr(env, rExpr);
-  env["var"] = (env, l, rExpr) => {
+function createRootEnv() {
+  const rootEnv = {};
+  rootEnv["@"] = null;
+  rootEnv["rem"] = (env, l, rExpr) => l;
+  rootEnv[";"] = (env, l, rExpr) => evalExpr(env, rExpr);
+  rootEnv["+"] = (env, l, rExpr) => l + evalExpr(env, rExpr);
+  rootEnv["-"] = (env, l, rExpr) => l - evalExpr(env, rExpr);
+  rootEnv["*"] = (env, l, rExpr) => l * evalExpr(env, rExpr);
+  rootEnv["=="] = (env, l, rExpr) => l === evalExpr(env, rExpr);
+  rootEnv["!="] = (env, l, rExpr) => l !== evalExpr(env, rExpr);
+  rootEnv["<"] = (env, l, rExpr) => l < evalExpr(env, rExpr);
+  rootEnv["<="] = (env, l, rExpr) => l <= evalExpr(env, rExpr);
+  rootEnv[">"] = (env, l, rExpr) => l > evalExpr(env, rExpr);
+  rootEnv[">="] = (env, l, rExpr) => l >= evalExpr(env, rExpr);
+  rootEnv["var"] = (env, l, rExpr) => {
     const name = evalExpr(env, rExpr);
     env[name] = null;
     return name;
   };
-  env["="] = (env, l, rExpr) => {
+  rootEnv["="] = (env, l, rExpr) => {
     if (l instanceof Array) {
       console.assert(l.length === 2);
       const [obj, key] = l;
       return obj[key] = evalExpr(env, rExpr);
     }
     const name = l;
-    const e = ownerEnv(env, name) ?? env;
+    const e = ownerEnv(env, name) ?? rootEnv;
     return e[name] = evalExpr(env, rExpr);
   };
-  env["."] = (env, l, rExpr) => {
+  rootEnv["."] = (env, l, rExpr) => {
     return l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(env, rExpr)];
   };
-  env[","] = (env, l, rExpr) => {
+  rootEnv[","] = (env, l, rExpr) => {
     if (l?.__isDicUnderConstruction) return { ...l, __tmpKey: evalExpr(env, rExpr) };
     if (l instanceof Array) return [...l, evalExpr(env, rExpr)];
     return [l, evalExpr(env, rExpr)];
   };
-  env["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
-  env["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
-  env["?"] = (env, l, rExpr) => (Boolean(l) && { __valWhenTrue: evalExpr(env, rExpr) });
-  env[":"] = (env, l, rExpr) => {
+  rootEnv["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
+  rootEnv["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
+  rootEnv["?"] = (env, l, rExpr) => (Boolean(l) && { __valWhenTrue: evalExpr(env, rExpr) });
+  rootEnv[":"] = (env, l, rExpr) => {
     if (l === false) return evalExpr(env, rExpr);
     if (typeof l === "object" && "__valWhenTrue" in l) return l.__valWhenTrue;
     if (typeof l === "string") return { __isDicUnderConstruction: true, [l]: evalExpr(env, rExpr) };
@@ -136,17 +137,18 @@ function addGlobalVals(env) {
       return { ...l, [key]: evalExpr(env, rExpr) };
     }
   };
-  env["=>"] = (env, l, rExpr) => (
+  rootEnv["=>"] = (env, l, rExpr) => (
     { env, argNames: (Array.isArray(l) ? l : [l]), expr: rExpr }
   );
-  env["range"] = (env, l, rExpr) => [...Array(evalExpr(env, rExpr))].map((_, i) => i);
-  env["length"] = (env, l, rExpr) => evalExpr(env, rExpr).length;
-  env["map"] = (env, l, rExpr) => {
+  rootEnv["range"] = (env, l, rExpr) => [...Array(evalExpr(env, rExpr))].map((_, i) => i);
+  rootEnv["length"] = (env, l, rExpr) => evalExpr(env, rExpr).length;
+  rootEnv["map"] = (env, l, rExpr) => {
     const func = evalExpr(env, rExpr);
     return l.map((v) => callUserFunc(func, undefined, v));
   };
-  env["forEach"] = env["map"];
-  env["print"] = (env, l, rExpr) => log(evalExpr(env, rExpr));
+  rootEnv["forEach"] = rootEnv["map"];
+  rootEnv["print"] = (env, l, rExpr) => log(evalExpr(env, rExpr));
+  return rootEnv;
 }
 
 globalThis.log = console.log;
@@ -154,7 +156,5 @@ globalThis.log = console.log;
 export function evalCode(code) {
   const tokens = tokenize(code);
   const expr = parse(tokens);
-  const env = {};
-  addGlobalVals(env);
-  return evalExpr(env, expr);
+  return evalExpr(createRootEnv(), expr);
 }
