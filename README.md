@@ -225,7 +225,7 @@ function evalSequenceExpr(env, expr) {
     const rExpr = expr.exprs[i++] ?? { type: "Null" };
     val = callFunc(env, func, val, rExpr);
   }
-  if (expr.subtype === "{" && typeof val === "object") delete val.__isDicUnderConstruction;
+  if (expr.subtype === "{" && val?.__type === "DicUnderConstruction") val = val.body;
   return val;
 }
 
@@ -377,17 +377,17 @@ function callFunc(env, func, l, rExpr) {
 
 ### 配列
 
-配列の生成は、ネイティブ関数 `,`、
+配列の生成は、ネイティブ関数 `,` の、
 
 ```
   rootEnv[","] = (env, l, rExpr) => {
-    if (l?.__isDicUnderConstruction) return { ...l, __tmpKey: evalExpr(env, rExpr) };
+    ...
     if (l instanceof Array) return [...l, evalExpr(env, rExpr)];
     return [l, evalExpr(env, rExpr)];
   };
 ```
 
-で実現している。`__isDicUnderConstruction` が含まれている行は辞書のための処理で後に説明する。
+部分で実現している。
 
 `1, 2` とすると、上記ネイティブ関数 `,` により、1、2の配列になる。
 引数左が配列に対して、上記ネイティブ関数 `,` を呼び出すと、配列に値を追加していく。
@@ -432,44 +432,52 @@ function callFunc(env, func, l, rExpr) {
 
 ### 辞書
 
-辞書の生成は、ネイティブ関数 `:`、
+辞書の生成は、ネイティブ関数 `:` の
 
 ```
   rootEnv[":"] = (env, l, rExpr) => {
     ...
-    if (typeof l === "string") return { __isDicUnderConstruction: true, [l]: evalExpr(env, rExpr) };
-    if (l?.__isDicUnderConstruction) {
-      const key = l.__tmpKey;
-      delete l.__tmpKey;
-      return { ...l, [key]: evalExpr(env, rExpr) };
-    }
+    if (typeof l === "string")
+      return { __type: "DicUnderConstruction", body: { [l]: evalExpr(env, rExpr) } };
+    if (l?.__type === "DicUnderConstruction")
+      return { ...l, body: { ...l.body, [l.tmpKey]: evalExpr(env, rExpr) } };
   };
 ```
 
-と、先ほどのネイティブ関数 `,` で実現する。
+部分と、ネイティブ関数の `,` の
 
-`"a": 1` のような、左引数が文字列の場合、左引数をキー、右引数をバリューとした、キーバリューを1つのみ含む辞書を生成する。
-このとき、`__isDicUnderConstruction` で構築中の辞書であることを後処理のため分かるようにしている。
+```
+  rootEnv[","] = (env, l, rExpr) => {
+    if (l?.__type === "DicUnderConstruction") return { ...l, tmpKey: evalExpr(env, rExpr) };
+    ...
+```
+
+部分で実現する。
+
+`"a": 1` のような、左引数が文字列の場合、`__type` により辞書構築中専用と分かる専用の値を生成し、
+`body` に左引数をキー、右引数をバリューとした、キーバリューを1つのみ含む辞書を生成する。
 
 ここに、新たに、`, "b"` のように記述を続けると、先ほどのネイティブ関数 `,` の、
 
 ```
-    if (l?.__isDicUnderConstruction) return { ...l, __tmpKey: evalExpr(env, rExpr) };
+    if (l?.__type === "DicUnderConstruction") return { ...l, tmpKey: evalExpr(env, rExpr) };
 ```
 
-部分により、引数右に指定された文字列を、追加予定キー `__tmpKey` として保持する。
+部分により、引数右に指定された文字列を、追加予定キー `tmpKey` として保持する。
 そこに、`: 2` のように、ネイティブ関数 `:` が適用されると、
-ネイティブ関数 `:` の `if (l?.__isDicUnderConstruction)` 条件の処理により、辞書へのキーバリュー追加が完了する。
+ネイティブ関数 `:` の `if (l?.__type === "DicUnderConstruction")` 条件の処理により、
+辞書 `body` へのキーバリュー追加が完了する。
 
-ネイティブ関数 `,` は配列操作にも使われるため区別のために、`__isDicUnderConstruction` が必要になっている。
+ネイティブ関数 `,` は配列操作にも使われるため区別のために、`__type` が必要になっている。
 
 括弧を `}` で閉じ辞書が完成したときは、`evalSequenceExpr` の、
 
 ```
-  if (expr.subtype === "{" && typeof val === "object") delete val.__isDicUnderConstruction;
+  if (expr.subtype === "{" && val?.__type === "DicUnderConstruction") val = val.body;
 ```
 
-で `__isDicUnderConstruction` を削除し、その後は配列生成、配列追加にも適用可能になる。
+で `body` を取り出し、構築中専用の値から辞書そのものに変更する。
+その後は、`__type` が無くなるため、ネイティブ関数 `,` による配列生成、配列追加が可能になる。
 
 辞書を参照するには、配列でも登場したネイティブ関数 `.`、
 
@@ -551,10 +559,11 @@ function callFunc(env, func, l, rExpr) {
 ```
   rootEnv["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
   rootEnv["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
-  rootEnv["?"] = (env, l, rExpr) => (Boolean(l) && { __valWhenTrue: evalExpr(env, rExpr) });
+  rootEnv["?"] = (env, l, rExpr) =>
+    ({ __type: "IfThenResult", isTrue: l, exprIfTrue: rExpr });
   rootEnv[":"] = (env, l, rExpr) => {
-    if (l === false) return evalExpr(env, rExpr);
-    if (typeof l === "object" && "__valWhenTrue" in l) return l.__valWhenTrue;
+    if (l?.__type === "IfThenResult")
+      return evalExpr(env, l.isTrue ? l.exprIfTrue : rExpr);
     ...
   };
 ```

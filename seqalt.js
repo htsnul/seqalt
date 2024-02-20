@@ -69,7 +69,7 @@ function evalSequenceExpr(env, expr) {
     const rExpr = expr.exprs[i++] ?? { type: "Null" };
     val = callFunc(env, func, val, rExpr);
   }
-  if (expr.subtype === "{" && typeof val === "object") delete val.__isDicUnderConstruction;
+  if (expr.subtype === "{" && val?.__type === "DicUnderConstruction") val = val.body;
   return val;
 }
 
@@ -120,22 +120,21 @@ function createRootEnv() {
     return l[rExpr.type === "Symbol" ? rExpr.value : evalExpr(env, rExpr)];
   };
   rootEnv[","] = (env, l, rExpr) => {
-    if (l?.__isDicUnderConstruction) return { ...l, __tmpKey: evalExpr(env, rExpr) };
+    if (l?.__type === "DicUnderConstruction") return { ...l, tmpKey: evalExpr(env, rExpr) };
     if (l instanceof Array) return [...l, evalExpr(env, rExpr)];
     return [l, evalExpr(env, rExpr)];
   };
   rootEnv["&&"] = (env, l, rExpr) => (l && evalExpr(env, rExpr));
   rootEnv["||"] = (env, l, rExpr) => (l || evalExpr(env, rExpr));
-  rootEnv["?"] = (env, l, rExpr) => (Boolean(l) && { __valWhenTrue: evalExpr(env, rExpr) });
+  rootEnv["?"] = (env, l, rExpr) =>
+    ({ __type: "IfThenResult", isTrue: l, exprIfTrue: rExpr });
   rootEnv[":"] = (env, l, rExpr) => {
-    if (l === false) return evalExpr(env, rExpr);
-    if (typeof l === "object" && "__valWhenTrue" in l) return l.__valWhenTrue;
-    if (typeof l === "string") return { __isDicUnderConstruction: true, [l]: evalExpr(env, rExpr) };
-    if (l?.__isDicUnderConstruction) {
-      const key = l.__tmpKey;
-      delete l.__tmpKey;
-      return { ...l, [key]: evalExpr(env, rExpr) };
-    }
+    if (l?.__type === "IfThenResult")
+      return evalExpr(env, l.isTrue ? l.exprIfTrue : rExpr);
+    if (typeof l === "string")
+      return { __type: "DicUnderConstruction", body: { [l]: evalExpr(env, rExpr) } };
+    if (l?.__type === "DicUnderConstruction")
+      return { ...l, body: { ...l.body, [l.tmpKey]: evalExpr(env, rExpr) } };
   };
   rootEnv["=>"] = (env, l, rExpr) => (
     { env, argNames: (Array.isArray(l) ? l : [l]), expr: rExpr }
