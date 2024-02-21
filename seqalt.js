@@ -89,8 +89,8 @@ function envVal(env, name) { return ownerEnv(env, name)[name]; }
 
 function createRootEnv() {
   const rootEnv = {};
-  rootEnv["@"] = null;
-  rootEnv["rem"] = (env, l, rExpr) => l;
+  rootEnv["@"] = rootEnv["_"] = null;
+  rootEnv["//"] = (env, l, rExpr) => l;
   rootEnv[";"] = (env, l, rExpr) => evalExpr(env, rExpr);
   rootEnv["+"] = (env, l, rExpr) => l + evalExpr(env, rExpr);
   rootEnv["-"] = (env, l, rExpr) => l - evalExpr(env, rExpr);

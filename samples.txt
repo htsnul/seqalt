@@ -233,3 +233,12 @@
 @(pos.move)(3, 3);
 @(pos.print)();
 
+#### Comment ####
+
+_// "This is comment";
+@print("test");
+
+@print(
+  111 // "This is comment" + 222
+);
+
