@@ -48,7 +48,7 @@ onload = async () => {
     const code = document.querySelector("textarea").value;
     try {
       const result = evalCode(code, log);
-      document.querySelector(".result").innerHTML += result;
+      document.querySelector(".result").innerHTML += JSON.stringify(result);
     } catch (e) {
       document.querySelector(".result").innerHTML += e.message;
       throw e;
