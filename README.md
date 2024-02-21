@@ -130,8 +130,8 @@ Hello Worldは、
     "x": x,
     "y": y,
     "move": (("x", "y") => {
-      (this, "x") = (this.x + x);
-      (this, "y") = (this.y + y);
+      [this, "x"] = (this.x + x);
+      [this, "y"] = (this.y + y);
     }),
     "print": (() => {
       @print((this.x) + ", " + (this.y));
@@ -193,7 +193,7 @@ function tokenize(str) {
     } else if (r = str.slice(i).match(/^"((\\.|[^"])*)"/)) {
       tokens.push({ type: "String", string: r[1].replace(/\\./g, (s) => s[1]) });
       i += r[0].length;
-    } else if (r = str.slice(i).match(/^[A-Za-z_]\w*|^[^\w\s\(\)\[\]{}"]+/)) {
+    } else if (r = str.slice(i).match(/^[A-Za-z_]\w*|^[!#-'*-/:-@^`|~]+/)) {
       tokens.push({ type: "Symbol", string: r[0] });
       i += r[0].length;
     } else ++i;
@@ -209,6 +209,13 @@ function tokenize(str) {
 * シンボル
 
 の何れかの種類として文字列を切り分けていく。
+
+文字列は `"` 間を判定しているが、エスケープ処理のため、`\` は次の文字とセットで優先して読み、
+その後、`replace` で `\` 後の文字のみ取り出している。
+今回は対応してないが、改行などのエスケープ文字に対応する場合はここで行うことになるだろう。
+
+シンボルは、基本はよくある1文字目のみ英字アンダーバー、2文字目以降は英数字アンダーバーとしているが、
+それに加えて、連続する記号もすべてシンボルと扱っている。
 
 ## トークン配列を構文木に変換
 
@@ -247,21 +254,37 @@ function parse(tokens) { return parseSequence(tokens, 0).expr; }
 
 エクスプレッション自体も括弧始まりのものはシーケンスとなる、なので相互に再帰的にツリーが形成されていく。
 
+例えば、`@print("Test: " + (1 + 2))` の場合、
+
+* Symbol: `@`
+* Symbol: `print`
+* Sequence: `(`
+  * String: `Test: `
+  * Symbol: `+`
+  * Sequence: `(`
+    * Number: 1
+    * Symbol: `+`
+    * Number: 2
+
+となる。
+
 ## 構文木を評価
 
 ### 評価
 
+分かりやすさのため、括弧の種類 `subtype` に関連した特殊な処理を除くと、
+
 ```
 function evalSequenceExpr(env, expr) {
-  if (expr.exprs.length === 0) return expr.subtype === "[" ? [] : undefined;
+  ...
   let val = evalExpr(env, expr.exprs[0]);
-  if (expr.subtype === "[") val = [val];
+  ...
   for (let i = 1; i < expr.exprs.length;) {
     const func = evalExpr(env, expr.exprs[i++]);
     const rExpr = expr.exprs[i++] ?? { type: "Null" };
     val = callFunc(env, func, val, rExpr);
   }
-  if (expr.subtype === "{" && val?.__type === "DicUnderConstruction") val = val.body;
+  ...
   return val;
 }
 
@@ -274,22 +297,24 @@ function evalExpr(env, expr) {
 }
 ```
 
-シンプルだがシーケンスと呼んでいる構造の評価が、工夫している部分になる。
+となる。
 
-シーケンスは、
+シーケンスの評価が、特に工夫した部分になる。
+
+シーケンスを、
 
 ```
-引数 関数0 引数0 関数1 引数1 関数2 引数2...
+引数 関数0 引数0 関数1 引数1 関数2 引数2 ...
 ```
 
-と、引数と関数が交互に並んでいるとみなし、1個おきに関数呼び出しをしていく。
+と、引数と関数が交互に並んでいるものとみなし、1個おきに関数呼び出しをしていく。
 
 このとき、直前までの評価の結果を引数左、直後のエクスプレッションを引数右として関数に渡す。
 
 ステートメントに見えるものの区切り `;` も、配列の区切り `,` も、ネイティブ関数として提供している。
 このように、様々な処理を統一的に扱うことでシンプルにしている。
 
-`seqalt` という名前は、シーケンスを交互に関数呼び出ししていく構造に由来している。
+リポジトリ名 `seqalt` は、シーケンスを交互に関数呼び出ししていくこの仕様に由来し名付けた。
 
 `print` のような引数左が不要な関数呼び出しは、`@print(3)` のようにダミーの値 `@` を直前に書くことになる。
 逆に、二項演算子的な関数や、パイプ的な関数は通常関数の呼び出しよりも書きやすくなる。
@@ -297,8 +322,6 @@ function evalExpr(env, expr) {
 処理は左から右に処理され、演算子の優先度のような処理はない。
 なので、`3 + 5 * 4` は `32` になってしまう、これを防ぐために `3 + (5 * 4)` と書く必要がある。
 逆に考えれば、優先度を覚えたり調べたりする必要がない。括弧は多くなってしまうが。
-
-括弧の種類 `subtype` に関連した特殊処理があるが、後に説明する。
 
 シンボルについて。シンボルは評価時に `envVal` により環境変数の対応する値になる。
 
@@ -432,10 +455,10 @@ function callFunc(env, func, l, rExpr) {
 これでおおよそ任意の配列が作れるのだが、要素数0、要素数1、最初の要素自体が配列の配列、
 はこの方法では生成することができない。
 
-先述のシーケンスの評価 `evalSequenceExpr` で、
+そこで、シーケンスの評価 `evalSequenceExpr` で、
 
 ```
-  if (expr.exprs.length === 0) return expr.subtype === "[" ? [] : undefined;
+  if (expr.exprs.length === 0) return { "[": [], "{": {} }[expr.subtype];
   let val = evalExpr(env, expr.exprs[0]);
   if (expr.subtype === "[") val = [val];
 ```
@@ -501,8 +524,14 @@ function callFunc(env, func, l, rExpr) {
 
 部分により、引数右に指定された文字列を、追加予定キー `tmpKey` として保持する。
 そこに、`: 2` のように、ネイティブ関数 `:` が適用されると、
-ネイティブ関数 `:` の `if (l?.__type === "DicUnderConstruction")` 条件の処理により、
-辞書 `body` へのキーバリュー追加が完了する。
+ネイティブ関数 `:` の
+
+```
+    if (l?.__type === "DicUnderConstruction")
+      return { ...l, body: { ...l.body, [l.tmpKey]: evalExpr(env, rExpr) } };
+```
+
+部分により、辞書 `body` へのキーバリュー追加が完了する。
 
 ネイティブ関数 `,` は配列操作にも使われるため区別のために、`__type` が必要になっている。
 
@@ -513,7 +542,7 @@ function callFunc(env, func, l, rExpr) {
 ```
 
 で `body` を取り出し、構築中専用の値から辞書そのものに変更する。
-その後は、`__type` が無くなるため、ネイティブ関数 `,` による配列生成、配列追加が可能になる。
+その後は、`__type` が無くなるため、ネイティブ関数 `,` による配列生成、配列追加の対象として扱えるようになる。
 
 辞書を参照するには、配列でも登場したネイティブ関数 `.`、
 
@@ -540,8 +569,7 @@ function callFunc(env, func, l, rExpr) {
 
 ```
   rootEnv["="] = (env, l, rExpr) => {
-    if (Array.isArray(l)) {
-      console.assert(l.length === 2);
+    if (Array.isArray(l) && l.length === 2) {
       const [obj, key] = l;
       return obj[key] = evalExpr(env, rExpr);
     }
@@ -558,19 +586,21 @@ function callFunc(env, func, l, rExpr) {
 
 ```
 [ary, 2] = 9;
-(dic, "b") = 4;
+[dic, "b"] = 4;
 ```
 
 と代入することができる。
 入れ子になっている場合には、
 
 ```
-(dic.c, "d") = 5;
 [(ary.0), 1] = 8;
+[(dic.c), "d"] = 5;
 ```
 
-となる。配列の場合に `(`、`)` ではなく `[`、`]` を使っているのは、
+となる。配列の場合は必ず `(`、`)` ではなく `[`、`]` を使う必要がある。
 既に説明したように、最初の要素が配列内の配列となるようにするためである。
+
+辞書では `(`、`)` を使っても良いのだが、上記では配列との統一のため `[`、`]` を使った。
 
 ## その他ネイティブ関数
 

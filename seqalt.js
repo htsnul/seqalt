@@ -12,7 +12,7 @@ function tokenize(str) {
     } else if (r = str.slice(i).match(/^"((\\.|[^"])*)"/)) {
       tokens.push({ type: "String", string: r[1].replace(/\\./g, (s) => s[1]) });
       i += r[0].length;
-    } else if (r = str.slice(i).match(/^[A-Za-z_]\w*|^[^\w\s\(\)\[\]{}"]+/)) {
+    } else if (r = str.slice(i).match(/^[A-Za-z_]\w*|^[!#-'*-/:-@^`|~]+/)) {
       tokens.push({ type: "Symbol", string: r[0] });
       i += r[0].length;
     } else ++i;
@@ -61,7 +61,7 @@ function callFunc(env, func, l, rExpr) {
 }
 
 function evalSequenceExpr(env, expr) {
-  if (expr.exprs.length === 0) return expr.subtype === "[" ? [] : undefined;
+  if (expr.exprs.length === 0) return { "[": [], "{": {} }[expr.subtype];
   let val = evalExpr(env, expr.exprs[0]);
   if (expr.subtype === "[") val = [val];
   for (let i = 1; i < expr.exprs.length;) {
@@ -107,8 +107,7 @@ function createRootEnv() {
     return name;
   };
   rootEnv["="] = (env, l, rExpr) => {
-    if (Array.isArray(l)) {
-      console.assert(l.length === 2);
+    if (Array.isArray(l) && l.length === 2) {
       const [obj, key] = l;
       return obj[key] = evalExpr(env, rExpr);
     }
