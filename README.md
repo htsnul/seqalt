@@ -122,6 +122,42 @@ Hello Worldは、
 
 となる。
 
+辞書とクロージャーを組み合わせれば、クラスも、
+
+```
+"Position" = (("x", "y") => {
+  @var "this" = {
+    "x": x,
+    "y": y,
+    "move": (("x", "y") => {
+      (this, "x") = (this.x + x);
+      (this, "y") = (this.y + y);
+    }),
+    "print": (() => {
+      @print((this.x) + ", " + (this.y));
+    })
+  }
+});
+
+"pos" = (@Position(0, 5));
+
+@(pos.print)();
+@(pos.move)(2, 2);
+@(pos.print)();
+@(pos.move)(3, 3);
+@(pos.print)();
+```
+
+出力：
+
+```
+0, 5
+2, 7
+5, 10
+```
+
+と実現できる。
+
 ## 全体の流れ
 
 1. 文字列をトークン配列に変換
