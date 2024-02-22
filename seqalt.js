@@ -95,6 +95,8 @@ function createRootEnv() {
   rootEnv["+"] = (env, l, rExpr) => l + evalExpr(env, rExpr);
   rootEnv["-"] = (env, l, rExpr) => l - evalExpr(env, rExpr);
   rootEnv["*"] = (env, l, rExpr) => l * evalExpr(env, rExpr);
+  rootEnv["/"] = (env, l, rExpr) => l / evalExpr(env, rExpr);
+  rootEnv["!"] = (env, l, rExpr) => !evalExpr(env, rExpr);
   rootEnv["=="] = (env, l, rExpr) => l === evalExpr(env, rExpr);
   rootEnv["!="] = (env, l, rExpr) => l !== evalExpr(env, rExpr);
   rootEnv["<"] = (env, l, rExpr) => l < evalExpr(env, rExpr);
@@ -139,7 +141,7 @@ function createRootEnv() {
     { env, argNames: (Array.isArray(l) ? l : [l]), expr: rExpr }
   );
   rootEnv["range"] = (env, l, rExpr) => [...Array(evalExpr(env, rExpr))].map((_, i) => i);
-  rootEnv["length"] = (env, l, rExpr) => evalExpr(env, rExpr).length;
+  rootEnv["length"] = (env, l, rExpr) => l.length;
   rootEnv["map"] = (env, l, rExpr) => {
     const func = evalExpr(env, rExpr);
     return l.map((v) => callUserFunc(func, undefined, v));
