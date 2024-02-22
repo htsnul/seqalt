@@ -183,9 +183,9 @@ function tokenize(str) {
   const tokens = [];
   for (let i = 0; i < str.length;) {
     let r;
-    if (["(", "[", "{"].includes(str[i])) {
+    if ("([{".includes(str[i])) {
       tokens.push({ type: "SequenceStart", string: str[i++] });
-    } else if ([")", "]", "}"].includes(str[i])) {
+    } else if (")]}".includes(str[i])) {
       tokens.push({ type: "SequenceEnd", string: str[i++] });
     } else if (r = str.slice(i).match(/^\d+/)) {
       tokens.push({ type: "Number", string: r[0] });
