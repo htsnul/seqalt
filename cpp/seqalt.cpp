@@ -237,14 +237,13 @@ Value *evalExpr(Value *env, Value *expr) {
   return new Value();
 }
 
-// function ownerEnv(env, name) {
-//   return (!env || name in env) ? env : ownerEnv(env.__parentEnv, name);
-// }
-//
-// function envVal(env, name) { return ownerEnv(env, name)[name]; }
+Value* ownerEnv(Value* env, std::string_view name) {
+  return env;
+  //   return (!env || name in env) ? env : ownerEnv(env.__parentEnv, name);
+}
+
 Value *envVal(Value *env, std::string_view name) {
-  // return ownerEnv(env, name)[name]; }
-  return env->asDic()[std::string(name)];
+  return ownerEnv(env, name)->asDic()[std::string(name)];
 }
 
 Value *createRootEnv() {
@@ -269,6 +268,24 @@ Value *createRootEnv() {
         return Value::createNumber(l->asNumber() *
                                    evalExpr(env, rExpr)->asNumber());
       }));
+  //rootEnv["var"] = (env, l, rExpr) => {
+  //  const name = evalExpr(env, rExpr);
+  //  env[name] = null;
+  //  return name;
+  //};
+  //rootEnv["="] = (env, l, rExpr) => {
+  rootEnv->asDic().emplace(
+      "=", new Value([](Value *env, Value *l, Value *rExpr) {
+        //  if (Array.isArray(l) && l.length === 2) {
+        //    const [obj, key] = l;
+        //    return obj[key] = evalExpr(env, rExpr);
+        //  }
+        //  const name = l;
+        auto name = l->asString();
+        // TODO: rootenv
+        auto* e = ownerEnv(env, name);
+        return e->asDic()[name] = evalExpr(env, rExpr);
+      }));
   rootEnv->asDic().emplace(
       "print", new Value([](Value *env, Value *l, Value *rExpr) {
         std::cout << evalExpr(env, rExpr)->toString() << std::endl;
@@ -278,8 +295,8 @@ Value *createRootEnv() {
 }
 
 int main() {
-  const auto tokens = tokenize(getStdinString());
-  //const auto tokens = tokenize("@print(15+3)");
+  //const auto tokens = tokenize(getStdinString());
+  const auto tokens = tokenize("\"a\"=3; @print(a)");
   // const auto tokens = tokenize("0 print \"hello\"");
   const auto expr = parse(tokens);
   const auto val = evalExpr(createRootEnv(), expr);
