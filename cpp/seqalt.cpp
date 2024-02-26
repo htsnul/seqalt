@@ -71,20 +71,19 @@ struct GarbageCollector {
 struct Value {
   using Array = std::vector<Value *>;
   using Dic = std::unordered_map<std::string, Value *>;
-  using NativeFunction = Value *(*)(Value *env, Value *l, Value *rExr);
-  using Body =
-      std::variant<std::nullptr_t, double, std::unique_ptr<std::string>,
-                   std::unique_ptr<Array>, std::unique_ptr<Dic>,
-                   NativeFunction>;
+  using NativeFunction = Value* (*)(Value* env, Value* l, Value* rExr);
+  using Body = std::variant<
+    std::nullptr_t,
+    double,
+    std::unique_ptr<std::string>,
+    std::unique_ptr<Array>,
+    std::unique_ptr<Dic>,
+    NativeFunction
+  >;
   Body body;
-  static Value *createNull() { return new Value(); }
-  static Value *createNumber(double num) { return new Value(num); }
-  static Value *createString(std::string_view str) {
-    return new Value(std::make_unique<std::string>(str));
-  }
-  static Value *createDic(std::initializer_list<Dic::value_type> list) {
-    return new Value(std::make_unique<Dic>(list));
-  }
+  Value(std::string_view str) : Value(std::make_unique<std::string>(str)) {}
+  Value(std::initializer_list<Dic::value_type> list)
+  : Value(std::make_unique<Dic>(list)) {}
   Value() { garbageCollector.values.push_front(this); }
   Value(Body &&body) : Value() { this->body = std::move(body); }
   double &asNumber() { return std::get<double>(body); }
@@ -148,20 +147,35 @@ std::pair<size_t, Value *> parseExpr(const std::vector<Token> &tokens,
   }
   if (token.type == Token::Type::Number) {
     double num{};
-    std::from_chars(token.string.data(),
-                    token.string.data() + token.string.size(), num);
-    return {i + 1, Value::createDic({{"type", Value::createString("Number")},
-                                     {"value", Value::createNumber(num)}})};
+    std::from_chars(
+      token.string.data(),
+      token.string.data() + token.string.size(), num
+    );
+    return {
+      i + 1,
+      new Value({
+        {"type", new Value("Number")},
+        {"value", new Value(num)}
+      })
+    };
   }
   if (token.type == Token::Type::String) {
-    return {i + 1,
-            Value::createDic({{"type", Value::createString("String")},
-                              {"value", Value::createString(token.string)}})};
+    return {
+      i + 1,
+      new Value({
+        {"type", new Value("String")},
+        {"value", new Value(token.string)}
+      })
+    };
   }
   if (token.type == Token::Type::Symbol) {
-    return {i + 1,
-            Value::createDic({{"type", Value::createString("Symbol")},
-                              {"value", Value::createString(token.string)}})};
+    return {
+      i + 1,
+      new Value({
+        {"type", new Value("Symbol")},
+        {"value", new Value(token.string)}
+      })
+    };
   }
 }
 
@@ -173,9 +187,14 @@ std::pair<size_t, Value *> parseSequence(const std::vector<Token> &tokens,
     i = result.first;
     exprs->asArray().push_back(result.second);
   }
-  return {i, Value::createDic({{"type", Value::createString("Sequence")},
-                               {"subtype", Value::createString(subtype)},
-                               {"exprs", exprs}})};
+  return {
+    i,
+    new Value({
+      {"type", new Value("Sequence")},
+      {"subtype", new Value(subtype)},
+      {"exprs", exprs}
+    })
+  };
 }
 
 Value *parse(const std::vector<Token> &tokens) {
@@ -208,10 +227,11 @@ Value *evalSequenceExpr(Value *env, Value *expr) {
   {}
   for (size_t i = 1; i < expr->asDic()["exprs"]->asArray().size();) {
     auto *func = evalExpr(env, expr->asDic()["exprs"]->asArray().at(i++));
-    auto *rExpr =
-        i < expr->asDic()["exprs"]->asArray().size()
-            ? expr->asDic()["exprs"]->asArray().at(i++)
-            : Value::createDic({{"type", Value::createString("Null")}});
+    auto *rExpr = (
+      i < expr->asDic()["exprs"]->asArray().size()
+      ? expr->asDic()["exprs"]->asArray().at(i++)
+      : new Value({{"type", new Value("Null")}})
+    );
     val = callFunc(env, func, val, rExpr);
   }
   //  if (expr.subtype === "{" && val?.__type === "DicUnderConstruction") val =
@@ -226,10 +246,10 @@ Value *evalExpr(Value *env, Value *expr) {
     return evalSequenceExpr(env, expr);
   }
   if (expr->asDic()["type"]->asString() == "Number") {
-    return Value::createNumber(expr->asDic()["value"]->asNumber());
+    return new Value(expr->asDic()["value"]->asNumber());
   }
   if (expr->asDic()["type"]->asString() == "String") {
-    return Value::createString(expr->asDic()["value"]->asString());
+    return new Value(expr->asDic()["value"]->asString());
   }
   if (expr->asDic()["type"]->asString() == "Symbol") {
     return envVal(env, expr->asDic()["value"]->asString());
@@ -249,48 +269,39 @@ Value *envVal(Value *env, std::string_view name) {
 Value *createRootEnv() {
   Value *rootEnv = new Value(std::make_unique<Value::Dic>());
   rootEnv->asDic().emplace("@", new Value());
-  rootEnv->asDic().emplace(";",
-                           new Value([](Value *env, Value *l, Value *rExpr) {
-                             return evalExpr(env, rExpr);
-                           }));
-  rootEnv->asDic().emplace(
-      "+", new Value([](Value *env, Value *l, Value *rExpr) {
-        return Value::createNumber(l->asNumber() +
-                                   evalExpr(env, rExpr)->asNumber());
-      }));
-  rootEnv->asDic().emplace(
-      "-", new Value([](Value *env, Value *l, Value *rExpr) {
-        return Value::createNumber(l->asNumber() -
-                                   evalExpr(env, rExpr)->asNumber());
-      }));
-  rootEnv->asDic().emplace(
-      "*", new Value([](Value *env, Value *l, Value *rExpr) {
-        return Value::createNumber(l->asNumber() *
-                                   evalExpr(env, rExpr)->asNumber());
-      }));
+  rootEnv->asDic().emplace(";", new Value([](Value *env, Value *l, Value *rExpr) {
+    return evalExpr(env, rExpr);
+  }));
+  rootEnv->asDic().emplace("+", new Value([](Value *env, Value *l, Value *rExpr) {
+    return new Value(l->asNumber() + evalExpr(env, rExpr)->asNumber());
+  }));
+  rootEnv->asDic().emplace("-", new Value([](Value *env, Value *l, Value *rExpr) {
+    return new Value(l->asNumber() - evalExpr(env, rExpr)->asNumber());
+  }));
+  rootEnv->asDic().emplace("*", new Value([](Value *env, Value *l, Value *rExpr) {
+    return new Value(l->asNumber() * evalExpr(env, rExpr)->asNumber());
+  }));
   //rootEnv["var"] = (env, l, rExpr) => {
   //  const name = evalExpr(env, rExpr);
   //  env[name] = null;
   //  return name;
   //};
   //rootEnv["="] = (env, l, rExpr) => {
-  rootEnv->asDic().emplace(
-      "=", new Value([](Value *env, Value *l, Value *rExpr) {
-        //  if (Array.isArray(l) && l.length === 2) {
-        //    const [obj, key] = l;
-        //    return obj[key] = evalExpr(env, rExpr);
-        //  }
-        //  const name = l;
-        auto name = l->asString();
-        // TODO: rootenv
-        auto* e = ownerEnv(env, name);
-        return e->asDic()[name] = evalExpr(env, rExpr);
-      }));
-  rootEnv->asDic().emplace(
-      "print", new Value([](Value *env, Value *l, Value *rExpr) {
-        std::cout << evalExpr(env, rExpr)->toString() << std::endl;
-        return new Value();
-      }));
+  rootEnv->asDic().emplace("=", new Value([](Value *env, Value *l, Value *rExpr) {
+    //  if (Array.isArray(l) && l.length === 2) {
+    //    const [obj, key] = l;
+    //    return obj[key] = evalExpr(env, rExpr);
+    //  }
+    //  const name = l;
+    auto name = l->asString();
+    // TODO: rootenv
+    auto* e = ownerEnv(env, name);
+    return e->asDic()[name] = evalExpr(env, rExpr);
+  }));
+  rootEnv->asDic().emplace("print", new Value([](Value *env, Value *l, Value *rExpr) {
+    std::cout << evalExpr(env, rExpr)->toString() << std::endl;
+    return new Value();
+  }));
   return rootEnv;
 }
 
