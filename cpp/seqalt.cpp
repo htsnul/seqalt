@@ -90,6 +90,9 @@ struct Value {
   std::string &asString() {
     return *std::get<std::unique_ptr<std::string>>(body);
   }
+  operator std::string_view() {
+    return *std::get<std::unique_ptr<std::string>>(body);
+  }
   Array &asArray() { return *std::get<std::unique_ptr<Array>>(body); }
   Dic &asDic() { return *std::get<std::unique_ptr<Dic>>(body); }
   NativeFunction asNativeFunction() { return std::get<NativeFunction>(body); }
@@ -242,16 +245,16 @@ Value *evalSequenceExpr(Value *env, Value *expr) {
 Value *envVal(Value *env, std::string_view name);
 
 Value *evalExpr(Value *env, Value *expr) {
-  if (expr->asDic()["type"]->asString() == "Sequence") {
+  if (*expr->asDic()["type"] == "Sequence"sv) {
     return evalSequenceExpr(env, expr);
   }
-  if (expr->asDic()["type"]->asString() == "Number") {
+  if (*expr->asDic()["type"] == "Number"sv) {
     return new Value(expr->asDic()["value"]->asNumber());
   }
-  if (expr->asDic()["type"]->asString() == "String") {
+  if (*expr->asDic()["type"] == "String"sv) {
     return new Value(expr->asDic()["value"]->asString());
   }
-  if (expr->asDic()["type"]->asString() == "Symbol") {
+  if (*expr->asDic()["type"] == "Symbol"sv) {
     return envVal(env, expr->asDic()["value"]->asString());
   }
   return new Value();
