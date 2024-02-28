@@ -24,28 +24,29 @@ auto tokenize(std::string_view str) {
   for (size_t i = 0; i < str.length();) {
     std::cmatch m;
     if (str[i] == '(' || str[i] == '{' || str[i] == '[') {
-      tokens.push_back(
-          Token{Token::Type::SequenceStart, std::string(1, str[i++])});
+      tokens.push_back(Token{Token::Type::SequenceStart, std::string(1, str[i++])});
     } else if (str[i] == ')' || str[i] == '}' || str[i] == ']') {
-      tokens.push_back(
-          Token{Token::Type::SequenceEnd, std::string(1, str[i++])});
-    } else if (std::regex_search(str.begin() + i, str.end(), m,
-                                 std::regex("^\\d+"))) {
+      tokens.push_back(Token{Token::Type::SequenceEnd, std::string(1, str[i++])});
+    } else if (std::regex_search(
+      str.begin() + i, str.end(), m, std::regex("^\\d+"))
+    ) {
       tokens.push_back(Token{Token::Type::Number, m[0]});
       i += m.length(0);
-    } else if (std::regex_search(str.begin() + i, str.end(), m,
-                                 std::regex(R"""(^"((\\.|[^"])*)")"""))) {
+    } else if (std::regex_search(
+      str.begin() + i, str.end(), m, std::regex(R"""(^"((\\.|[^"])*)")"""))
+    ) {
       tokens.push_back(Token{
-          Token::Type::String,
-          std::regex_replace(std::string(m[1]), std::regex("\\\\(.)"), "$1")});
+        Token::Type::String,
+        std::regex_replace(std::string(m[1]), std::regex("\\\\(.)"), "$1")}
+      );
       i += m.length(0);
     } else if (std::regex_search(
-                   str.begin() + i, str.end(), m,
-                   std::regex(R"""(^[A-Za-z_]\w*|^[!#-'*-/:-@^`|~]+)"""))) {
+        str.begin() + i, str.end(), m,
+        std::regex(R"""(^[A-Za-z_]\w*|^[!#-'*-/:-@^`|~]+)"""))
+    ) {
       tokens.push_back(Token{Token::Type::Symbol, m[0]});
       i += m.length(0);
-    } else
-      ++i;
+    } else ++i;
   }
   return tokens;
 }
@@ -71,28 +72,19 @@ std::pair<size_t, Value> parseExpr(
     );
     return {
       i + 1,
-      Value(new DynamicValue({
-        {"type", Value("Number")},
-        {"value", Value(num)}
-      }))
+      Value({{"type", Value("Number")}, {"value", Value(num)}})
     };
   }
   if (token.type == Token::Type::String) {
     return {
       i + 1,
-      Value(new DynamicValue({
-        {"type", Value("String")},
-        {"value", Value(token.string)}
-      }))
+      Value({{"type", Value("String")}, {"value", Value(token.string)}})
     };
   }
   if (token.type == Token::Type::Symbol) {
     return {
       i + 1,
-      Value(new DynamicValue({
-        {"type", Value("Symbol")},
-        {"value", Value(token.string)}
-      }))
+      Value({{"type", Value("Symbol")}, {"value", Value(token.string)}})
     };
   }
   return {i, Value()};
@@ -101,19 +93,19 @@ std::pair<size_t, Value> parseExpr(
 std::pair<size_t, Value> parseSequence(
   const std::vector<Token> &tokens, size_t i, std::string subtype
 ) {
-  Value exprs(new DynamicValue(Array()));
+  Value exprs;
   while (i < tokens.size() && tokens.at(i).type != Token::Type::SequenceEnd) {
     const auto result = parseExpr(tokens, i);
     i = result.first;
-    (*exprs.asDynamicValue())->asArray().push_back(Value(result.second));
+    exprs.push(result.second);
   }
   return {
     i,
-    Value(new DynamicValue({
-      {"type", Value(new DynamicValue("Sequence"))},
-      {"subtype", Value(new DynamicValue(subtype))},
+    Value({
+      {"type", Value("Sequence")},
+      {"subtype", Value(subtype)},
       {"exprs", exprs}
-    }))
+    })
   };
 }
 
@@ -151,7 +143,7 @@ Value evalSequenceExpr(Value env, Value expr) {
     auto rExpr = (
       i < expr["exprs"].length()
       ? expr["exprs"][i++]
-      : Value(new DynamicValue({{"type", Value("Null")}}))
+      : Value({{"type", Value("Null")}})
     );
     val = callFunc(env, func, val, rExpr);
   }
@@ -180,8 +172,8 @@ Value envVal(Value env, std::string_view name) {
 }
 
 Value createRootEnv() {
-  Value rootEnv(new DynamicValue(Dic()));
-  rootEnv["@"] = new DynamicValue();
+  Value rootEnv;
+  rootEnv["@"] = Value{};
   rootEnv[";"] = Value([](Value env, Value l, Value rExpr) {
     return evalExpr(env, rExpr);
   });
@@ -220,11 +212,6 @@ Value createRootEnv() {
 
 Value evalCode(std::string_view str) {
   const auto tokens = tokenize(str);
-  //const auto tokens = tokenize("\"a\"=3; @print(a)");
-  //const auto tokens = tokenize("0+1");
-  // const auto tokens = tokenize("0 print \"hello\"");
   auto expr = Value(parse(tokens));
-  auto val = evalExpr(createRootEnv(), expr);
-  std::cout << val.toString() << std::endl;
-  return {};
+  return evalExpr(createRootEnv(), expr);
 }

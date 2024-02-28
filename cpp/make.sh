@@ -12,7 +12,7 @@ build() {
 }
 
 run() {
-  #get_sample "Hello World" | ./a.out
+  get_sample "Hello World" | ./a.out
   get_sample "Arithmetic" | ./a.out
 }
 
