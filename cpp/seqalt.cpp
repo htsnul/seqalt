@@ -75,12 +75,19 @@ using Dic = std::unordered_map<std::string, Value>;
 using NativeFunction = Value (*)(Value env, Value l, Value rExr);
 
 struct Value {
-  using Body = std::variant<DynamicValue*>;
+  using Body = std::variant<
+    std::nullptr_t,
+    double,
+    NativeFunction,
+    DynamicValue*
+  >;
   Body body;
-  inline Value();
+  Value() {}
   Value(const Body& body) { this->body = body; }
+  inline Value(std::string_view str);
   Value& operator=(const Body& body) { this->body = body; return *this; }
-  DynamicValue*& asDynamicValue() { return std::get<DynamicValue*>(body); }
+  NativeFunction* asNativeFunction() { return std::get_if<NativeFunction>(&body); }
+  DynamicValue** asDynamicValue() { return std::get_if<DynamicValue*>(&body); }
   inline double toNumber();
   inline std::string toString();
   inline operator std::string_view();
@@ -91,12 +98,9 @@ struct Value {
 
 struct DynamicValue {
   using Body = std::variant<
-    std::nullptr_t,
-    double,
     std::string,
     Array,
-    Dic,
-    NativeFunction
+    Dic
   >;
   Body body;
   DynamicValue() { garbageCollector.values.push_front(this); }
@@ -111,18 +115,7 @@ struct DynamicValue {
   }
   Value& operator[](size_t i) { return asArray().at(i); }
   size_t length() { return asArray().size(); }
-  NativeFunction asNativeFunction() { return std::get<NativeFunction>(body); }
-  double toNumber() {
-    if (auto* num = std::get_if<double>(&body)) return *num;
-    return 0.0;
-  }
   std::string toString() {
-    if (std::holds_alternative<std::nullptr_t>(body)) {
-      return "null";
-    }
-    if (std::holds_alternative<double>(body)) {
-      return std::to_string(std::get<double>(body));
-    }
     if (std::holds_alternative<std::string>(body)) {
       return std::get<std::string>(body);
     }
@@ -150,20 +143,57 @@ struct DynamicValue {
       s += "}";
       return s;
     }
-    if (std::holds_alternative<NativeFunction>(body)) {
-      return "NativeFunction";
-    }
     return {};
   }
 };
 
-Value::Value() : Value(new DynamicValue()) {}
-Value::operator std::string_view() { return *asDynamicValue(); }
-size_t Value::length() { return (*asDynamicValue()).length(); }
-Value& Value::operator[](size_t i) { return (*asDynamicValue())[i]; }
-Value& Value::operator[](std::string_view s) { return (*asDynamicValue())[s]; }
-double Value::toNumber() { return asDynamicValue()->toNumber(); }
-std::string Value::toString() { return asDynamicValue()->toString(); }
+Value::Value(std::string_view str)
+{
+   body = new DynamicValue(std::string(str));
+}
+
+double Value::toNumber() {
+  if (auto* num = std::get_if<double>(&body)) return *num;
+  return 0.0;
+}
+
+std::string Value::toString() {
+  if (std::holds_alternative<std::nullptr_t>(body)) {
+    return "null";
+  }
+  if (std::holds_alternative<double>(body)) {
+    return std::to_string(std::get<double>(body));
+  }
+  if (std::holds_alternative<NativeFunction>(body)) {
+    return "NativeFunction";
+  }
+  if (auto** dv = asDynamicValue()) return (*dv)->toString();
+  return "";
+}
+
+Value::operator std::string_view() {
+  if (auto** dv = asDynamicValue()) return **dv;
+  return ""sv;
+}
+
+size_t Value::length() {
+  if (auto** dv = asDynamicValue()) return (*dv)->length();
+  return 0;
+}
+
+Value& Value::operator[](size_t i) {
+  if (!asDynamicValue()) {
+    *this = new DynamicValue(Array(i + 1));
+  }
+  return (**asDynamicValue())[i];
+}
+
+Value& Value::operator[](std::string_view s) {
+  if (!asDynamicValue()) {
+    *this = new DynamicValue(Dic());
+  }
+  return (**asDynamicValue())[s];
+}
 
 std::pair<size_t, Value> parseSequence(
   const std::vector<Token> &tokens, size_t i, std::string subtype = "("
@@ -187,8 +217,8 @@ std::pair<size_t, Value> parseExpr(
     return {
       i + 1,
       Value(new DynamicValue({
-        {"type", Value(new DynamicValue("Number"))},
-        {"value", Value(new DynamicValue(num))}
+        {"type", Value("Number")},
+        {"value", Value(num)}
       }))
     };
   }
@@ -196,8 +226,8 @@ std::pair<size_t, Value> parseExpr(
     return {
       i + 1,
       Value(new DynamicValue({
-        {"type", Value(new DynamicValue("String"))},
-        {"value", Value(new DynamicValue(token.string))}
+        {"type", Value("String")},
+        {"value", Value(token.string)}
       }))
     };
   }
@@ -205,11 +235,12 @@ std::pair<size_t, Value> parseExpr(
     return {
       i + 1,
       Value(new DynamicValue({
-        {"type", Value(new DynamicValue("Symbol"))},
-        {"value", Value(new DynamicValue(token.string))}
+        {"type", Value("Symbol")},
+        {"value", Value(token.string)}
       }))
     };
   }
+  return {i, Value()};
 }
 
 std::pair<size_t, Value> parseSequence(
@@ -219,7 +250,7 @@ std::pair<size_t, Value> parseSequence(
   while (i < tokens.size() && tokens.at(i).type != Token::Type::SequenceEnd) {
     const auto result = parseExpr(tokens, i);
     i = result.first;
-    exprs.asDynamicValue()->asArray().push_back(Value(result.second));
+    (*exprs.asDynamicValue())->asArray().push_back(Value(result.second));
   }
   return {
     i,
@@ -244,11 +275,12 @@ Value parse(const std::vector<Token> &tokens) {
 //}
 
 Value callFunc(Value env, Value func, Value l, Value rExpr) {
-  if (std::holds_alternative<NativeFunction>(func.asDynamicValue()->body)) {
-    return func.asDynamicValue()->asNativeFunction()(env, l, rExpr);
+  if (auto* nativeFunc = func.asNativeFunction()) {
+    return (*nativeFunc)(env, l, rExpr);
   }
   // if (typeof func === "object") return callUserFunc(func, l, evalExpr(env,
   // rExpr));
+  return {};
 }
 
 Value evalExpr(Value env, Value expr);
@@ -264,7 +296,7 @@ Value evalSequenceExpr(Value env, Value expr) {
     auto rExpr = (
       i < expr["exprs"].length()
       ? expr["exprs"][i++]
-      : Value(new DynamicValue({{"type", Value(new DynamicValue("Null"))}}))
+      : Value(new DynamicValue({{"type", Value("Null")}}))
     );
     val = callFunc(env, func, val, rExpr);
   }
@@ -295,17 +327,17 @@ Value envVal(Value env, std::string_view name) {
 Value createRootEnv() {
   Value rootEnv(new DynamicValue(Dic()));
   rootEnv["@"] = new DynamicValue();
-  rootEnv[";"] = new DynamicValue([](Value env, Value l, Value rExpr) {
+  rootEnv[";"] = Value([](Value env, Value l, Value rExpr) {
     return evalExpr(env, rExpr);
   });
-  rootEnv["+"] = new DynamicValue([](Value env, Value l, Value rExpr) {
-    return Value(new DynamicValue(l.toNumber() + evalExpr(env, rExpr).toNumber()));
+  rootEnv["+"] = Value([](Value env, Value l, Value rExpr) {
+    return Value(l.toNumber() + evalExpr(env, rExpr).toNumber());
   });
-  rootEnv["-"] = new DynamicValue([](Value env, Value l, Value rExpr) {
-    return Value(new DynamicValue(l.toNumber() - evalExpr(env, rExpr).toNumber()));
+  rootEnv["-"] = Value([](Value env, Value l, Value rExpr) {
+    return Value(l.toNumber() - evalExpr(env, rExpr).toNumber());
   });
-  rootEnv["*"] = new DynamicValue([](Value env, Value l, Value rExpr) {
-    return Value(new DynamicValue(l.toNumber() * evalExpr(env, rExpr).toNumber()));
+  rootEnv["*"] = Value([](Value env, Value l, Value rExpr) {
+    return Value(l.toNumber() * evalExpr(env, rExpr).toNumber());
   });
   //rootEnv["var"] = (env, l, rExpr) => {
   //  const name = evalExpr(env, rExpr);
@@ -313,7 +345,7 @@ Value createRootEnv() {
   //  return name;
   //};
   //rootEnv["="] = (env, l, rExpr) => {
-  rootEnv["="] = new DynamicValue([](Value env, Value l, Value rExpr) {
+  rootEnv["="] = Value([](Value env, Value l, Value rExpr) {
     //  if (Array.isArray(l) && l.length === 2) {
     //    const [obj, key] = l;
     //    return obj[key] = evalExpr(env, rExpr);
@@ -324,7 +356,7 @@ Value createRootEnv() {
     auto e = ownerEnv(env, name);
     return e[name] = evalExpr(env, rExpr);
   });
-  rootEnv["print"] = new DynamicValue([](Value env, Value l, Value rExpr) {
+  rootEnv["print"] = Value([](Value env, Value l, Value rExpr) {
     std::cout << evalExpr(env, rExpr).toString() << std::endl;
     return Value{};
   });
