@@ -7,14 +7,6 @@
 
 using namespace std::literals;
 
-std::string getStdinString() {
-  std::string str;
-  std::string line;
-  while (std::getline(std::cin, line))
-    str += line + "\n";
-  return str;
-}
-
 struct Token {
   enum class Type {
     SequenceStart,
@@ -226,13 +218,13 @@ Value createRootEnv() {
   return rootEnv;
 }
 
-int main() {
-  const auto tokens = tokenize(getStdinString());
+Value evalCode(std::string_view str) {
+  const auto tokens = tokenize(str);
   //const auto tokens = tokenize("\"a\"=3; @print(a)");
   //const auto tokens = tokenize("0+1");
   // const auto tokens = tokenize("0 print \"hello\"");
   auto expr = Value(parse(tokens));
   auto val = evalExpr(createRootEnv(), expr);
   std::cout << val.toString() << std::endl;
-  return 0;
+  return {};
 }

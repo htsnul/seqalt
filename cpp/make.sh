@@ -8,7 +8,7 @@ get_sample() {
 }
 
 build() {
-  clang++ -std=c++20 seqalt.cpp
+  clang++ -std=c++20 main.cpp seqalt.cpp
 }
 
 run() {

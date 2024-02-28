@@ -11,7 +11,7 @@ using namespace std::literals;
 
 struct DynamicValue;
 
-struct GarbageCollector {
+inline struct GarbageCollector {
   std::forward_list<DynamicValue *> values;
 } garbageCollector;
 
