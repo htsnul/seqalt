@@ -62,16 +62,34 @@ auto tokenize(std::string_view str) {
   return tokens;
 }
 
-struct Value;
+struct DynamicValue;
 
 struct GarbageCollector {
-  std::forward_list<Value *> values;
+  std::forward_list<DynamicValue *> values;
 } garbageCollector;
 
+struct Value;
+
+using Array = std::vector<Value>;
+using Dic = std::unordered_map<std::string, Value>;
+using NativeFunction = Value (*)(Value env, Value l, Value rExr);
+
 struct Value {
-  using Array = std::vector<Value *>;
-  using Dic = std::unordered_map<std::string, Value *>;
-  using NativeFunction = Value* (*)(Value* env, Value* l, Value* rExr);
+  using Body = std::variant<DynamicValue*>;
+  Body body;
+  inline Value();
+  Value(const Body& body) { this->body = body; }
+  Value& operator=(const Body& body) { this->body = body; return *this; }
+  DynamicValue*& asDynamicValue() { return std::get<DynamicValue*>(body); }
+  inline double toNumber();
+  inline std::string toString();
+  inline operator std::string_view();
+  inline size_t length();
+  inline Value& operator[](size_t i);
+  inline Value& operator[](std::string_view s);
+};
+
+struct DynamicValue {
   using Body = std::variant<
     std::nullptr_t,
     double,
@@ -81,19 +99,17 @@ struct Value {
     NativeFunction
   >;
   Body body;
-  Value() { garbageCollector.values.push_front(this); }
-  Value(const Value& val) : Value(val.body) {}
-  Value(const Body& body) : Value() { this->body = body; }
-  Value(std::initializer_list<Dic::value_type> list) : Value(Dic(list)) {}
+  DynamicValue() { garbageCollector.values.push_front(this); }
+  DynamicValue(const DynamicValue& val) : DynamicValue(val.body) {}
+  DynamicValue(const Body& body) : DynamicValue() { this->body = body; }
+  DynamicValue(std::initializer_list<Dic::value_type> list) : DynamicValue(Dic(list)) {}
   operator std::string_view() { return std::get<std::string>(body); }
   Array &asArray() { return std::get<Array>(body); }
   Dic &asDic() { return std::get<Dic>(body); }
   Value& operator[](std::string_view str) {
-    auto*& v = asDic()[std::string(str)];
-    if (!v) v = new Value();
-    return *v;
+    return asDic()[std::string(str)];
   }
-  Value& operator[](size_t i) { return *asArray().at(i); }
+  Value& operator[](size_t i) { return asArray().at(i); }
   size_t length() { return asArray().size(); }
   NativeFunction asNativeFunction() { return std::get<NativeFunction>(body); }
   double toNumber() {
@@ -111,24 +127,24 @@ struct Value {
       return std::get<std::string>(body);
     }
     if (std::holds_alternative<Array>(body)) {
-      const auto &array = std::get<Array>(body);
+      auto &array = std::get<Array>(body);
       std::string s{};
       size_t i{0};
       s += "[";
       for (auto &e : array) {
-        s += e->toString() + (i != array.size() - 1 ? "," : "");
+        s += e.toString() + (i != array.size() - 1 ? "," : "");
         ++i;
       }
       s += "]";
       return s;
     }
     if (std::holds_alternative<Dic>(body)) {
-      const auto &dic = std::get<Dic>(body);
+      auto &dic = std::get<Dic>(body);
       std::string s{};
       size_t i{0};
       s += "{";
       for (auto &[k, v] : dic) {
-        s += k + ":" + v->toString() + (i != dic.size() - 1 ? "," : "");
+        s += k + ":" + v.toString() + (i != dic.size() - 1 ? "," : "");
         ++i;
       }
       s += "}";
@@ -141,11 +157,21 @@ struct Value {
   }
 };
 
-std::pair<size_t, Value *> parseSequence(const std::vector<Token> &tokens,
-                                         size_t i, std::string subtype = "(");
+Value::Value() : Value(new DynamicValue()) {}
+Value::operator std::string_view() { return *asDynamicValue(); }
+size_t Value::length() { return (*asDynamicValue()).length(); }
+Value& Value::operator[](size_t i) { return (*asDynamicValue())[i]; }
+Value& Value::operator[](std::string_view s) { return (*asDynamicValue())[s]; }
+double Value::toNumber() { return asDynamicValue()->toNumber(); }
+std::string Value::toString() { return asDynamicValue()->toString(); }
 
-std::pair<size_t, Value *> parseExpr(const std::vector<Token> &tokens,
-                                     size_t i) {
+std::pair<size_t, Value> parseSequence(
+  const std::vector<Token> &tokens, size_t i, std::string subtype = "("
+);
+
+std::pair<size_t, Value> parseExpr(
+  const std::vector<Token> &tokens, size_t i
+) {
   const auto &token = tokens.at(i);
   if (token.type == Token::Type::SequenceStart) {
     auto result = parseSequence(tokens, i + 1, token.string);
@@ -160,51 +186,52 @@ std::pair<size_t, Value *> parseExpr(const std::vector<Token> &tokens,
     );
     return {
       i + 1,
-      new Value({
-        {"type", new Value("Number")},
-        {"value", new Value(num)}
-      })
+      Value(new DynamicValue({
+        {"type", Value(new DynamicValue("Number"))},
+        {"value", Value(new DynamicValue(num))}
+      }))
     };
   }
   if (token.type == Token::Type::String) {
     return {
       i + 1,
-      new Value({
-        {"type", new Value("String")},
-        {"value", new Value(token.string)}
-      })
+      Value(new DynamicValue({
+        {"type", Value(new DynamicValue("String"))},
+        {"value", Value(new DynamicValue(token.string))}
+      }))
     };
   }
   if (token.type == Token::Type::Symbol) {
     return {
       i + 1,
-      new Value({
-        {"type", new Value("Symbol")},
-        {"value", new Value(token.string)}
-      })
+      Value(new DynamicValue({
+        {"type", Value(new DynamicValue("Symbol"))},
+        {"value", Value(new DynamicValue(token.string))}
+      }))
     };
   }
 }
 
-std::pair<size_t, Value *> parseSequence(const std::vector<Token> &tokens,
-                                         size_t i, std::string subtype) {
-  Value *exprs = new Value(Value::Array());
+std::pair<size_t, Value> parseSequence(
+  const std::vector<Token> &tokens, size_t i, std::string subtype
+) {
+  Value exprs(new DynamicValue(Array()));
   while (i < tokens.size() && tokens.at(i).type != Token::Type::SequenceEnd) {
     const auto result = parseExpr(tokens, i);
     i = result.first;
-    exprs->asArray().push_back(result.second);
+    exprs.asDynamicValue()->asArray().push_back(Value(result.second));
   }
   return {
     i,
-    new Value({
-      {"type", new Value("Sequence")},
-      {"subtype", new Value(subtype)},
+    Value(new DynamicValue({
+      {"type", Value(new DynamicValue("Sequence"))},
+      {"subtype", Value(new DynamicValue(subtype))},
       {"exprs", exprs}
-    })
+    }))
   };
 }
 
-Value *parse(const std::vector<Token> &tokens) {
+Value parse(const std::vector<Token> &tokens) {
   return parseSequence(tokens, 0).second;
 }
 
@@ -216,28 +243,28 @@ Value *parse(const std::vector<Token> &tokens) {
 //  return val;
 //}
 
-Value *callFunc(Value *env, Value *func, Value *l, Value *rExpr) {
-  if (std::holds_alternative<Value::NativeFunction>(func->body)) {
-    return func->asNativeFunction()(env, l, rExpr);
+Value callFunc(Value env, Value func, Value l, Value rExpr) {
+  if (std::holds_alternative<NativeFunction>(func.asDynamicValue()->body)) {
+    return func.asDynamicValue()->asNativeFunction()(env, l, rExpr);
   }
   // if (typeof func === "object") return callUserFunc(func, l, evalExpr(env,
   // rExpr));
 }
 
-Value *evalExpr(Value *env, Value *expr);
+Value evalExpr(Value env, Value expr);
 
-Value *evalSequenceExpr(Value *env, Value *expr) {
+Value evalSequenceExpr(Value env, Value expr) {
   //  if (expr.exprs.length === 0) return { "[": [], "{": {} }[expr.subtype];
   {}
-  Value *val = evalExpr(env, &(*expr)["exprs"][0]);
+  Value val = evalExpr(env, expr["exprs"][0]);
   //  if (expr.subtype === "[") val = [val];
   {}
-  for (size_t i = 1; i < (*expr)["exprs"].length();) {
-    auto *func = evalExpr(env, &(*expr)["exprs"][i++]);
-    auto *rExpr = (
-      i < (*expr)["exprs"].length()
-      ? &(*expr)["exprs"][i++]
-      : new Value({{"type", new Value("Null")}})
+  for (size_t i = 1; i < expr["exprs"].length();) {
+    auto func = evalExpr(env, expr["exprs"][i++]);
+    auto rExpr = (
+      i < expr["exprs"].length()
+      ? expr["exprs"][i++]
+      : Value(new DynamicValue({{"type", Value(new DynamicValue("Null"))}}))
     );
     val = callFunc(env, func, val, rExpr);
   }
@@ -246,39 +273,39 @@ Value *evalSequenceExpr(Value *env, Value *expr) {
   return val;
 }
 
-Value *envVal(Value *env, std::string_view name);
+Value envVal(Value env, std::string_view name);
 
-Value *evalExpr(Value *env, Value *expr) {
-  if ((*expr)["type"] == "Sequence"sv) return evalSequenceExpr(env, expr);
-  if ((*expr)["type"] == "Number"sv) return new Value((*expr)["value"]);
-  if ((*expr)["type"] == "String"sv) return new Value((*expr)["value"]);
-  if ((*expr)["type"] == "Symbol"sv) return envVal(env, (*expr)["value"]);
-  return new Value();
+Value evalExpr(Value env, Value expr) {
+  if (expr["type"] == "Sequence"sv) return evalSequenceExpr(env, expr);
+  if (expr["type"] == "Number"sv) return expr["value"];
+  if (expr["type"] == "String"sv) return expr["value"];
+  if (expr["type"] == "Symbol"sv) return envVal(env, expr["value"]);
+  return {};
 }
 
-Value* ownerEnv(Value* env, std::string_view name) {
+Value ownerEnv(Value env, std::string_view name) {
   return env;
   //   return (!env || name in env) ? env : ownerEnv(env.__parentEnv, name);
 }
 
-Value* envVal(Value *env, std::string_view name) {
-  return &(*ownerEnv(env, name))[name];
+Value envVal(Value env, std::string_view name) {
+  return ownerEnv(env, name)[name];
 }
 
-Value& createRootEnv() {
-  Value& rootEnv = *new Value(Value::Dic());
-  rootEnv["@"] = *new Value();
-  rootEnv[";"] = *new Value([](Value *env, Value *l, Value *rExpr) {
+Value createRootEnv() {
+  Value rootEnv(new DynamicValue(Dic()));
+  rootEnv["@"] = new DynamicValue();
+  rootEnv[";"] = new DynamicValue([](Value env, Value l, Value rExpr) {
     return evalExpr(env, rExpr);
   });
-  rootEnv["+"] = *new Value([](Value *env, Value *l, Value *rExpr) {
-    return new Value(l->toNumber() + evalExpr(env, rExpr)->toNumber());
+  rootEnv["+"] = new DynamicValue([](Value env, Value l, Value rExpr) {
+    return Value(new DynamicValue(l.toNumber() + evalExpr(env, rExpr).toNumber()));
   });
-  rootEnv["-"] = *new Value([](Value *env, Value *l, Value *rExpr) {
-    return new Value(l->toNumber() - evalExpr(env, rExpr)->toNumber());
+  rootEnv["-"] = new DynamicValue([](Value env, Value l, Value rExpr) {
+    return Value(new DynamicValue(l.toNumber() - evalExpr(env, rExpr).toNumber()));
   });
-  rootEnv["*"] = *new Value([](Value *env, Value *l, Value *rExpr) {
-    return new Value(l->toNumber() * evalExpr(env, rExpr)->toNumber());
+  rootEnv["*"] = new DynamicValue([](Value env, Value l, Value rExpr) {
+    return Value(new DynamicValue(l.toNumber() * evalExpr(env, rExpr).toNumber()));
   });
   //rootEnv["var"] = (env, l, rExpr) => {
   //  const name = evalExpr(env, rExpr);
@@ -286,30 +313,31 @@ Value& createRootEnv() {
   //  return name;
   //};
   //rootEnv["="] = (env, l, rExpr) => {
-  rootEnv["="] = *new Value([](Value *env, Value *l, Value *rExpr) {
+  rootEnv["="] = new DynamicValue([](Value env, Value l, Value rExpr) {
     //  if (Array.isArray(l) && l.length === 2) {
     //    const [obj, key] = l;
     //    return obj[key] = evalExpr(env, rExpr);
     //  }
     //  const name = l;
-    auto name = l->toString();
+    auto name = l.toString();
     // TODO: rootenv
-    auto* e = ownerEnv(env, name);
-    return e->asDic()[name] = evalExpr(env, rExpr);
+    auto e = ownerEnv(env, name);
+    return e[name] = evalExpr(env, rExpr);
   });
-  rootEnv["print"] = *new Value([](Value *env, Value *l, Value *rExpr) {
-    std::cout << evalExpr(env, rExpr)->toString() << std::endl;
-    return new Value();
+  rootEnv["print"] = new DynamicValue([](Value env, Value l, Value rExpr) {
+    std::cout << evalExpr(env, rExpr).toString() << std::endl;
+    return Value{};
   });
   return rootEnv;
 }
 
 int main() {
-  //const auto tokens = tokenize(getStdinString());
-  const auto tokens = tokenize("\"a\"=3; @print(a)");
+  const auto tokens = tokenize(getStdinString());
+  //const auto tokens = tokenize("\"a\"=3; @print(a)");
+  //const auto tokens = tokenize("0+1");
   // const auto tokens = tokenize("0 print \"hello\"");
-  const auto expr = parse(tokens);
-  const auto val = evalExpr(&createRootEnv(), expr);
-  std::cout << val->toString() << std::endl;
+  auto expr = Value(parse(tokens));
+  auto val = evalExpr(createRootEnv(), expr);
+  std::cout << val.toString() << std::endl;
   return 0;
 }
