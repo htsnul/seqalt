@@ -105,7 +105,7 @@ std::pair<size_t, Value> parseSequence(
   while (i < tokens.size() && tokens.at(i).type != Token::Type::SequenceEnd) {
     const auto result = parseExpr(tokens, i);
     i = result.first;
-    (*exprs.asDynamicValue())->asArray().push_back(Value(result.second));
+    (*exprs.asDynamicValue())->asArray()->push_back(Value(result.second));
   }
   return {
     i,
