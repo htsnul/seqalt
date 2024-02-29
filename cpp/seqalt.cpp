@@ -158,7 +158,7 @@ Value evalExpr(Value env, Value expr) {
   if (expr["type"] == "Sequence"sv) return evalSequenceExpr(env, expr);
   if (expr["type"] == "Number"sv) return expr["value"];
   if (expr["type"] == "String"sv) return expr["value"];
-  if (expr["type"] == "Symbol"sv) return envVal(env, expr["value"]);
+  if (expr["type"] == "Symbol"sv) return envVal(env, expr["value"].toString());
   return {};
 }
 
@@ -186,6 +186,15 @@ Value createRootEnv() {
   rootEnv["*"] = Value([](Value env, Value l, Value rExpr) {
     return Value(l.toNumber() * evalExpr(env, rExpr).toNumber());
   });
+  rootEnv["=="] = Value([](Value env, Value l, Value rExpr) {
+    return Value::fromBool(l == evalExpr(env, rExpr));
+  });
+  //rootEnv["!="] = Value([](Value env, Value l, Value rExpr) {
+  //  return Value::fromBool(l != evalExpr(env, rExpr));
+  //});
+  rootEnv["<"] = Value([](Value env, Value l, Value rExpr) {
+    return Value::fromBool(l.toNumber() < evalExpr(env, rExpr).toNumber());
+  });
   //rootEnv["var"] = (env, l, rExpr) => {
   //  const name = evalExpr(env, rExpr);
   //  env[name] = null;
@@ -202,6 +211,12 @@ Value createRootEnv() {
     // TODO: rootenv
     auto e = ownerEnv(env, name);
     return e[name] = evalExpr(env, rExpr);
+  });
+  rootEnv["&&"] = Value([](Value env, Value l, Value rExpr) {
+    return Value::fromBool(l.toBool() && evalExpr(env, rExpr).toBool());
+  });
+  rootEnv["||"] = Value([](Value env, Value l, Value rExpr) {
+    return Value::fromBool(l.toBool() || evalExpr(env, rExpr).toBool());
   });
   rootEnv["print"] = Value([](Value env, Value l, Value rExpr) {
     std::cout << evalExpr(env, rExpr).toString() << std::endl;
