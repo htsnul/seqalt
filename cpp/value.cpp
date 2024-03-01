@@ -48,6 +48,10 @@ bool Value::operator==(Value v) {
   return body == v.body;
 }
 
+bool Value::operator<(Value v) {
+  return toNumber() < v.toNumber();
+}
+
 double Value::toNumber() {
   if (auto num = asNumber()) return *num;
   return 0.0;

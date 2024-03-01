@@ -175,6 +175,7 @@ Value envVal(Value env, std::string_view name) {
 Value createRootEnv() {
   Value rootEnv;
   rootEnv["@"] = Value{};
+  //rootEnv["//"] = (env, l, rExpr) => l;
   rootEnv[";"] = Value([](Value env, Value l, Value rExpr) {
     return evalExpr(env, rExpr);
   });
@@ -190,11 +191,20 @@ Value createRootEnv() {
   rootEnv["=="] = Value([](Value env, Value l, Value rExpr) {
     return Value::fromBool(l == evalExpr(env, rExpr));
   });
-  //rootEnv["!="] = Value([](Value env, Value l, Value rExpr) {
-  //  return Value::fromBool(l != evalExpr(env, rExpr));
-  //});
+  rootEnv["!="] = Value([](Value env, Value l, Value rExpr) {
+    return Value::fromBool(l != evalExpr(env, rExpr));
+  });
   rootEnv["<"] = Value([](Value env, Value l, Value rExpr) {
-    return Value::fromBool(l.toNumber() < evalExpr(env, rExpr).toNumber());
+    return Value::fromBool(l < evalExpr(env, rExpr));
+  });
+  rootEnv["<="] = Value([](Value env, Value l, Value rExpr) {
+    return Value::fromBool(l <= evalExpr(env, rExpr));
+  });
+  rootEnv[">"] = Value([](Value env, Value l, Value rExpr) {
+    return Value::fromBool(l > evalExpr(env, rExpr));
+  });
+  rootEnv[">="] = Value([](Value env, Value l, Value rExpr) {
+    return Value::fromBool(l >= evalExpr(env, rExpr));
   });
   //rootEnv["var"] = (env, l, rExpr) => {
   //  const name = evalExpr(env, rExpr);
@@ -219,6 +229,26 @@ Value createRootEnv() {
   rootEnv["||"] = Value([](Value env, Value l, Value rExpr) {
     return Value::fromBool(l.toBool() || evalExpr(env, rExpr).toBool());
   });
+  //rootEnv["?"] = (env, l, rExpr) =>
+  //  ({ __type: "IfThenResult", isTrue: l, exprIfTrue: rExpr });
+  //rootEnv[":"] = (env, l, rExpr) => {
+  //  if (l?.__type === "IfThenResult")
+  //    return evalExpr(env, l.isTrue ? l.exprIfTrue : rExpr);
+  //  if (typeof l === "string")
+  //    return { __type: "DicUnderConstruction", body: { [l]: evalExpr(env, rExpr) } };
+  //  if (l?.__type === "DicUnderConstruction")
+  //    return { ...l, body: { ...l.body, [l.tmpKey]: evalExpr(env, rExpr) } };
+  //};
+  //rootEnv["=>"] = (env, l, rExpr) => (
+  //  { env, argNames: (Array.isArray(l) ? l : [l]), expr: rExpr }
+  //);
+  //rootEnv["range"] = (env, l, rExpr) => [...Array(evalExpr(env, rExpr))].map((_, i) => i);
+  //rootEnv["length"] = (env, l, rExpr) => l.length;
+  //rootEnv["map"] = (env, l, rExpr) => {
+  //  const func = evalExpr(env, rExpr);
+  //  return l.map((v) => callUserFunc(func, undefined, v));
+  //};
+  //rootEnv["forEach"] = rootEnv["map"];
   rootEnv["print"] = Value([](Value env, Value l, Value rExpr) {
     std::cout << evalExpr(env, rExpr).toString() << std::endl;
     return Value{};

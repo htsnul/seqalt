@@ -17,6 +17,10 @@ struct Value {
   Value(std::initializer_list<std::pair<const std::string, Value>> dic);
   Value& operator=(Body body) { this->body = body; return *this; }
   bool operator==(Value v);
+  bool operator<(Value v);
+  bool operator<=(Value v) { return !(*this > v); }
+  bool operator>(Value v) { return *this != v && !(*this < v); }
+  bool operator>=(Value v) { return !(*this < v); }
   bool isNull() { return std::holds_alternative<std::nullptr_t>(body); }
   double* asNumber() { return std::get_if<double>(&body); }
   NativeFunction* asNativeFunction() { return std::get_if<NativeFunction>(&body); }
