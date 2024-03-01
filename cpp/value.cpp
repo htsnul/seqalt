@@ -18,11 +18,12 @@ struct DynamicValue {
   std::string* asString() { return std::get_if<std::string>(&body); }
   Array* asArray() { return std::get_if<Array>(&body); }
   Dic* asDic() { return std::get_if<Dic>(&body); }
-  inline std::string toString();
-  inline size_t length();
-  inline size_t push(Value v);
-  inline Value& operator[](size_t i);
-  inline Value& operator[](std::string_view str);
+  std::string toString();
+  size_t length();
+  size_t push(Value v);
+  Value& operator[](size_t i);
+  bool has(std::string_view s);
+  Value& operator[](std::string_view str);
 };
 
 struct GarbageCollector {
@@ -41,6 +42,11 @@ Value::Value(std::initializer_list<std::pair<const std::string, Value>> dic) {
   body = new DynamicValue(dic);
 }
 
+Value Value::shallowCopy() {
+  if (auto d = asDynamicValue()) return Value(new DynamicValue(**d));
+  return *this;
+}
+
 bool Value::operator==(Value v) {
   if (auto d0 = asDynamicValue(), d1 = v.asDynamicValue(); d0 && d1) {
     return **d0 == **d1;
@@ -50,6 +56,13 @@ bool Value::operator==(Value v) {
 
 bool Value::operator<(Value v) {
   return toNumber() < v.toNumber();
+}
+
+Value Value::operator+(Value v) {
+  if (auto n0 = asNumber(), n1 = v.asNumber(); n0 && n1) {
+    return {toNumber() + v.toNumber()};
+  }
+  return {toString() + v.toString()};
 }
 
 double Value::toNumber() {
@@ -84,6 +97,11 @@ size_t Value::push(Value v) {
 Value& Value::operator[](size_t i) {
   if (!asDynamicValue()) body = new DynamicValue(Array(i + 1));
   return (**asDynamicValue())[i];
+}
+
+bool Value::has(std::string_view s) {
+  if (auto dv = asDynamicValue()) return (*dv)->has(s);
+  return false;
 }
 
 Value& Value::operator[](std::string_view s) {
@@ -139,6 +157,11 @@ size_t DynamicValue::push(Value v) {
 Value& DynamicValue::operator[](size_t i) {
   if (!asArray()) body = Array(i + 1);
   return asArray()->at(i);
+}
+
+bool DynamicValue::has(std::string_view s) {
+  if (auto dic = asDic()) return dic->find(std::string(s)) != dic->end();
+  return 0;
 }
 
 Value& DynamicValue::operator[](std::string_view str) {

@@ -16,11 +16,13 @@ struct Value {
   Value(std::initializer_list<Value> array);
   Value(std::initializer_list<std::pair<const std::string, Value>> dic);
   Value& operator=(Body body) { this->body = body; return *this; }
+  Value shallowCopy();
   bool operator==(Value v);
   bool operator<(Value v);
   bool operator<=(Value v) { return !(*this > v); }
   bool operator>(Value v) { return *this != v && !(*this < v); }
   bool operator>=(Value v) { return !(*this < v); }
+  Value operator+(Value v);
   bool isNull() { return std::holds_alternative<std::nullptr_t>(body); }
   double* asNumber() { return std::get_if<double>(&body); }
   NativeFunction* asNativeFunction() { return std::get_if<NativeFunction>(&body); }
@@ -31,6 +33,8 @@ struct Value {
   size_t length();
   size_t push(Value v);
   Value& operator[](size_t i);
+  bool has(std::string_view s);
   Value& operator[](std::string_view s);
+  Value& operator[](Value v) { return (*this)[v.toString()]; }
 };
 

@@ -16,6 +16,7 @@ run() {
   get_sample "Arithmetic" | ./a.out
   get_sample "Conditions" | ./a.out
   get_sample "Variable" | ./a.out
+  get_sample "User function" | ./a.out
 }
 
 format() {
