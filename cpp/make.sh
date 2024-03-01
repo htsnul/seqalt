@@ -8,14 +8,14 @@ get_sample() {
 }
 
 build() {
-  clang++ -std=c++20 main.cpp seqalt.cpp
+  clang++ -std=c++20 main.cpp seqalt.cpp value.cpp
 }
 
 run() {
-  #get_sample "Hello World" | ./a.out
-  #get_sample "Arithmetic" | ./a.out
+  get_sample "Hello World" | ./a.out
+  get_sample "Arithmetic" | ./a.out
   get_sample "Conditions" | ./a.out
-  #get_sample "Variable" | ./a.out
+  get_sample "Variable" | ./a.out
 }
 
 format() {
