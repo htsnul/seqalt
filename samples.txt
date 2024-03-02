@@ -112,7 +112,7 @@
 @print(a.b);
 @print(a.c.d);
 
-#### Varibale scoping ####
+#### Variable scoping ####
 
 "a" = 1;
 @print(a);

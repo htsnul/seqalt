@@ -17,6 +17,9 @@ run() {
   get_sample "Conditions" | ./a.out
   get_sample "Variable" | ./a.out
   get_sample "User function" | ./a.out
+  #get_sample "Array" | ./a.out
+  get_sample "Fibonacci" | ./a.out
+  get_sample "Variable scoping" | ./a.out
 }
 
 format() {

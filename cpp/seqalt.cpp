@@ -237,16 +237,19 @@ Value createRootEnv() {
   rootEnv["||"] = [](Value env, Value l, Value rExpr) {
     return Value::fromBool(l.toBool() || evalExpr(env, rExpr).toBool());
   };
-  //rootEnv["?"] = (env, l, rExpr) =>
-  //  ({ __type: "IfThenResult", isTrue: l, exprIfTrue: rExpr });
-  //rootEnv[":"] = (env, l, rExpr) => {
-  //  if (l?.__type === "IfThenResult")
-  //    return evalExpr(env, l.isTrue ? l.exprIfTrue : rExpr);
-  //  if (typeof l === "string")
-  //    return { __type: "DicUnderConstruction", body: { [l]: evalExpr(env, rExpr) } };
-  //  if (l?.__type === "DicUnderConstruction")
-  //    return { ...l, body: { ...l.body, [l.tmpKey]: evalExpr(env, rExpr) } };
-  //};
+  rootEnv["?"] = [](Value env, Value l, Value rExpr) {
+    return Value{{"__type", {"IfThenResult"}}, {"isTrue", l}, {"exprIfTrue", rExpr}};
+  };
+  rootEnv[":"] = [](Value env, Value l, Value rExpr) {
+    if (l["__type"] == "IfThenResult"sv) {
+      return evalExpr(env, l["isTrue"].toBool() ? l["exprIfTrue"] : rExpr);
+    }
+    //  if (typeof l === "string")
+    //    return { __type: "DicUnderConstruction", body: { [l]: evalExpr(env, rExpr) } };
+    //  if (l?.__type === "DicUnderConstruction")
+    //    return { ...l, body: { ...l.body, [l.tmpKey]: evalExpr(env, rExpr) } };
+    return Value{};
+  };
   rootEnv["=>"] = [](Value env, Value l, Value rExpr) {
     return Value{
       {"env", env},
