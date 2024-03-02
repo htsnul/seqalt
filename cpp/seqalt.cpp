@@ -165,7 +165,7 @@ Value createRootEnv() {
   static Value* rootEnvRef{};
   rootEnvRef = &rootEnv;
   rootEnv["@"] = Value{};
-  //rootEnv["//"] = (env, l, rExpr) => l;
+  rootEnv["//"] = [](Value env, Value l, Value rExpr) { return l; };
   rootEnv[";"] = [](Value env, Value l, Value rExpr) {
     return evalExpr(env, rExpr);
   };
