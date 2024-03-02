@@ -1,6 +1,7 @@
 #include "value.hpp"
 
 #include <forward_list>
+#include <sstream>
 #include <unordered_map>
 #include <vector>
 
@@ -82,7 +83,7 @@ bool Value::toBool() {
 
 std::string Value::toString() {
   if (isNull()) return "null";
-  if (auto num = asNumber()) return std::to_string(*num);
+  if (auto n = asNumber()) return (std::ostringstream{} << *n).str();
   if (asNativeFunction()) return "NativeFunction";
   if (auto dv = asDynamicValue()) return (*dv)->toString();
   return "";
