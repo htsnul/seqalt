@@ -11,9 +11,7 @@ using Dic = std::unordered_map<std::string, Value>;
 struct DynamicValue {
   using Body = std::variant<std::string, Array, Dic>;
   Body body;
-  DynamicValue();
-  DynamicValue(Body&& body) : DynamicValue() { this->body = body; }
-  DynamicValue(std::initializer_list<Dic::value_type> list) : DynamicValue(Dic(list)) {}
+  DynamicValue(Body&& body) { this->body = body; }
   inline bool operator==(DynamicValue& v);
   std::string* asString() { return std::get_if<std::string>(&body); }
   Array* asArray() { return std::get_if<Array>(&body); }
@@ -27,23 +25,29 @@ struct DynamicValue {
 };
 
 struct GarbageCollector {
-  std::forward_list<DynamicValue*> values;
+  std::forward_list<std::weak_ptr<DynamicValue>> values;
+  template<class ...Args>
+  std::shared_ptr<DynamicValue> makeShared(Args... args) {
+    auto ptr = std::make_shared<DynamicValue>(args...);
+    values.push_front(ptr);
+    return ptr;
+  }
 } garbageCollector;
 
 Value::Value(std::string_view str) {
-  body = new DynamicValue(std::string(str));
+  body = garbageCollector.makeShared(std::string(str));
 }
 
-Value::Value(std::initializer_list<Value> array) {
-  body = new DynamicValue(array);
+Value::Value(std::initializer_list<Value> l) {
+  body = garbageCollector.makeShared(l);
 }
 
-Value::Value(std::initializer_list<std::pair<const std::string, Value>> dic) {
-  body = new DynamicValue(dic);
+Value::Value(std::initializer_list<std::pair<const std::string, Value>> l) {
+  body = garbageCollector.makeShared(l);
 }
 
 Value Value::shallowCopy() {
-  if (auto d = asDynamicValue()) return Value(new DynamicValue(**d));
+  if (auto d = asDynamicValue()) return Value(garbageCollector.makeShared(**d));
   return *this;
 }
 
@@ -80,7 +84,7 @@ std::string Value::toString() {
   if (isNull()) return "null";
   if (auto num = asNumber()) return std::to_string(*num);
   if (asNativeFunction()) return "NativeFunction";
-  if (auto** dv = asDynamicValue()) return (*dv)->toString();
+  if (auto dv = asDynamicValue()) return (*dv)->toString();
   return "";
 }
 
@@ -90,12 +94,12 @@ size_t Value::length() {
 }
 
 size_t Value::push(Value v) {
-  if (!asDynamicValue()) body = new DynamicValue(Array());
+  if (!asDynamicValue()) body = garbageCollector.makeShared(Array());
   return (*asDynamicValue())->push(v);
 }
 
 Value& Value::operator[](size_t i) {
-  if (!asDynamicValue()) body = new DynamicValue(Array(i + 1));
+  if (!asDynamicValue()) body = garbageCollector.makeShared(Array(i + 1));
   return (**asDynamicValue())[i];
 }
 
@@ -105,12 +109,8 @@ bool Value::has(std::string_view s) {
 }
 
 Value& Value::operator[](std::string_view s) {
-  if (!asDynamicValue()) body = new DynamicValue(Dic());
+  if (!asDynamicValue()) body = garbageCollector.makeShared(Dic());
   return (**asDynamicValue())[s];
-}
-
-DynamicValue::DynamicValue() {
-  garbageCollector.values.push_front(this);
 }
 
 bool DynamicValue::operator==(DynamicValue& v) {
