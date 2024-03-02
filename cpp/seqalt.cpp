@@ -9,14 +9,8 @@
 using namespace std::literals;
 
 struct Token {
-  enum class Type {
-    SequenceStart,
-    SequenceEnd,
-    Number,
-    String,
-    Symbol,
-  };
-  Type type;
+  enum class Type { SequenceStart, SequenceEnd, Number, String, Symbol };
+  Type type{};
   std::string string;
 };
 
@@ -202,12 +196,11 @@ Value createRootEnv() {
   rootEnv[">="] = [](Value env, Value l, Value rExpr) {
     return Value::fromBool(l >= evalExpr(env, rExpr));
   };
-  //rootEnv["var"] = (env, l, rExpr) => {
-  //  const name = evalExpr(env, rExpr);
-  //  env[name] = null;
-  //  return name;
-  //};
-  //rootEnv["="] = (env, l, rExpr) => {
+  rootEnv["var"] = [](Value env, Value l, Value rExpr) {
+    auto name = evalExpr(env, rExpr);
+    env[name] = Value{};
+    return name;
+  };
   rootEnv["="] = [](Value env, Value l, Value rExpr) {
     //  if (Array.isArray(l) && l.length === 2) {
     //    const [obj, key] = l;
