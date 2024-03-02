@@ -120,11 +120,12 @@ Value callFunc(Value env, Value func, Value l, Value rExpr) {
 }
 
 Value evalSequenceExpr(Value env, Value expr) {
-  //  if (expr.exprs.length === 0) return { "[": [], "{": {} }[expr.subtype];
-  {}
+  if (expr["exprs"].length() == 0) {
+    //  if (expr.exprs.length === 0) return { "[": [], "{": {} }[expr.subtype];
+    return {};
+  }
   auto val = evalExpr(env, expr["exprs"][0]);
-  //  if (expr.subtype === "[") val = [val];
-  {}
+  if (expr["subtype"] == "["sv) val = {{val}};
   for (size_t i = 1; i < expr["exprs"].length();) {
     auto func = evalExpr(env, expr["exprs"][i++]);
     auto rExpr = (
@@ -202,11 +203,10 @@ Value createRootEnv() {
     return name;
   };
   rootEnv["="] = [](Value env, Value l, Value rExpr) {
-    //  if (Array.isArray(l) && l.length === 2) {
-    //    const [obj, key] = l;
-    //    return obj[key] = evalExpr(env, rExpr);
-    //  }
-    //  const name = l;
+    if (l.length() == 2) {
+      auto obj = l[0], key = l[1];
+      return obj[key] = evalExpr(env, rExpr);
+    }
     auto name = l.toString();
     auto e = ownerEnv(env, name);
     if (e.isNull()) e = *rootEnvRef;
@@ -251,7 +251,9 @@ Value createRootEnv() {
     };
   };
   //rootEnv["range"] = (env, l, rExpr) => [...Array(evalExpr(env, rExpr))].map((_, i) => i);
-  //rootEnv["length"] = (env, l, rExpr) => l.length;
+  rootEnv["length"] = [](Value env, Value l, Value rExpr) {
+    return Value(double(l.length()));
+  };
   //rootEnv["map"] = (env, l, rExpr) => {
   //  const func = evalExpr(env, rExpr);
   //  return l.map((v) => callUserFunc(func, undefined, v));

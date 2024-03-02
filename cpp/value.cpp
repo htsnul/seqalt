@@ -88,6 +88,11 @@ std::string Value::toString() {
   return "";
 }
 
+Value& Value::operator[](Value v) {
+  if (auto n = v.asNumber()) return (*this)[*n];
+  return (*this)[v.toString()];
+}
+
 size_t Value::length() {
   if (auto dv = asDynamicValue()) return (*dv)->length();
   return 0;

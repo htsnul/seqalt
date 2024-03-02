@@ -31,10 +31,10 @@ struct Value {
   double toNumber();
   bool toBool();
   std::string toString();
+  Value& operator[](Value v);
   size_t length();
   size_t push(Value v);
   Value& operator[](size_t i);
   bool has(std::string_view s);
   Value& operator[](std::string_view s);
-  Value& operator[](Value v) { return (*this)[v.toString()]; }
 };
