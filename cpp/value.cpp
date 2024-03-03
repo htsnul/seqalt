@@ -81,6 +81,11 @@ bool Value::toBool() {
   return true;
 }
 
+std::string* Value::asString() {
+  if (auto dv = asDynamicValue()) return (*dv)->asString();
+  return nullptr;
+}
+
 std::string Value::toString() {
   if (isNull()) return "null";
   if (auto n = asNumber()) return (std::ostringstream{} << *n).str();

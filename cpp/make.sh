@@ -14,7 +14,7 @@ run_sample() {
 }
 
 build() {
-  clang++ -std=c++20 main.cpp seqalt.cpp value.cpp
+  clang++ -std=c++17 main.cpp seqalt.cpp value.cpp
 }
 
 run() {
@@ -25,9 +25,10 @@ run() {
   run_sample "User function"
   run_sample "Array"
   run_sample "Fibonacci"
+  run_sample "Dictionary"
   run_sample "Variable scoping"
   run_sample "Closure"
-  #run_sample "Class"
+  run_sample "Class"
   run_sample "Comment"
 }
 

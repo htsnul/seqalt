@@ -135,8 +135,11 @@ Value evalSequenceExpr(Value env, Value expr) {
     );
     val = callFunc(env, func, val, rExpr);
   }
-  //  if (expr.subtype === "{" && val?.__type === "DicUnderConstruction") val =
-  //  val.body;
+  if (expr["subtype"] == "{"sv) {
+    if (val.has("__type") && val["__type"] == "DicUnderConstruction"sv) {
+      val = val["body"];
+    }
+  }
   return val;
 }
 
@@ -216,7 +219,11 @@ Value createRootEnv() {
     return l[(rExpr["type"] == "Symbol"sv ? rExpr["value"] : evalExpr(env, rExpr))];
   };
   rootEnv[","] = [](Value env, Value l, Value rExpr) {
-    //  if (l?.__type === "DicUnderConstruction") return { ...l, tmpKey: evalExpr(env, rExpr) };
+    if (l.has("__type") && l["__type"] == "DicUnderConstruction"sv) {
+      auto v = l.shallowCopy();
+      v["tmpKey"] = evalExpr(env, rExpr);
+      return v;
+    }
     if (l.length() > 0) {
       auto v = l.shallowCopy();
       v.push(evalExpr(env, rExpr));
@@ -234,13 +241,21 @@ Value createRootEnv() {
     return Value{{"__type", {"IfThenResult"}}, {"isTrue", l}, {"exprIfTrue", rExpr}};
   };
   rootEnv[":"] = [](Value env, Value l, Value rExpr) {
-    if (l["__type"] == "IfThenResult"sv) {
+    if (l.has("__type") && l["__type"] == "IfThenResult"sv) {
       return evalExpr(env, l["isTrue"].toBool() ? l["exprIfTrue"] : rExpr);
     }
-    //  if (typeof l === "string")
-    //    return { __type: "DicUnderConstruction", body: { [l]: evalExpr(env, rExpr) } };
-    //  if (l?.__type === "DicUnderConstruction")
-    //    return { ...l, body: { ...l.body, [l.tmpKey]: evalExpr(env, rExpr) } };
+    if (auto s = l.asString()) {
+      return Value{
+        {"__type", {"DicUnderConstruction"}},
+        {"body", {{*s, evalExpr(env,rExpr)}}}
+      };
+    }
+    if (l.has("__type") && l["__type"] == "DicUnderConstruction"sv) {
+      auto v = l.shallowCopy();
+      v["body"] = l["body"].shallowCopy();
+      v["body"][l["tmpKey"]] = evalExpr(env, rExpr);
+      return v;
+    }
     return Value{};
   };
   rootEnv["=>"] = [](Value env, Value l, Value rExpr) {

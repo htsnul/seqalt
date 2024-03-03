@@ -19,6 +19,7 @@ struct Value {
   Value& operator=(Body body) { this->body = body; return *this; }
   Value shallowCopy();
   bool operator==(Value v);
+  bool operator!=(Value v) { return !(*this == v); }
   bool operator<(Value v);
   bool operator<=(Value v) { return !(*this > v); }
   bool operator>(Value v) { return *this != v && !(*this < v); }
@@ -30,6 +31,7 @@ struct Value {
   std::shared_ptr<DynamicValue>* asDynamicValue() { return std::get_if<std::shared_ptr<DynamicValue>>(&body); }
   double toNumber();
   bool toBool();
+  std::string* asString();
   std::string toString();
   Value& operator[](Value v);
   size_t length();
