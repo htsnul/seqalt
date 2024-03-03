@@ -265,7 +265,6 @@ Value createRootEnv() {
       {"expr", rExpr}
     };
   };
-  //rootEnv["range"] = (env, l, rExpr) => [...Array(evalExpr(env, rExpr))].map((_, i) => i);
   rootEnv["range"] = [](Value env, Value l, Value rExpr) {
     Value v;
     for (size_t i = 0; i < evalExpr(env, rExpr).toNumber(); ++i) {
