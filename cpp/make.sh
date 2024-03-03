@@ -7,22 +7,28 @@ get_sample() {
     ../samples.txt
 }
 
+run_sample() {
+  local title=$1
+  printf '## %s\n' "$title"
+  get_sample "$1" | ./a.out
+}
+
 build() {
   clang++ -std=c++20 main.cpp seqalt.cpp value.cpp
 }
 
 run() {
-  get_sample "Hello World" | ./a.out
-  get_sample "Arithmetic" | ./a.out
-  get_sample "Conditions" | ./a.out
-  get_sample "Variable" | ./a.out
-  get_sample "User function" | ./a.out
-  get_sample "Array" | ./a.out
-  get_sample "Fibonacci" | ./a.out
-  get_sample "Variable scoping" | ./a.out
-  get_sample "Closure" | ./a.out
-  #get_sample "Class" | ./a.out
-  get_sample "Comment" | ./a.out
+  run_sample "Hello World"
+  run_sample "Arithmetic"
+  run_sample "Conditions"
+  run_sample "Variable"
+  run_sample "User function"
+  run_sample "Array"
+  run_sample "Fibonacci"
+  run_sample "Variable scoping"
+  run_sample "Closure"
+  #run_sample "Class"
+  run_sample "Comment"
 }
 
 format() {
