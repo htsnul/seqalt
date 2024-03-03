@@ -266,14 +266,31 @@ Value createRootEnv() {
     };
   };
   //rootEnv["range"] = (env, l, rExpr) => [...Array(evalExpr(env, rExpr))].map((_, i) => i);
+  rootEnv["range"] = [](Value env, Value l, Value rExpr) {
+    Value v;
+    for (size_t i = 0; i < evalExpr(env, rExpr).toNumber(); ++i) {
+      v.push({static_cast<double>(i)});
+    }
+    return v;
+  };
   rootEnv["length"] = [](Value env, Value l, Value rExpr) {
     return Value(double(l.length()));
   };
-  //rootEnv["map"] = (env, l, rExpr) => {
-  //  const func = evalExpr(env, rExpr);
-  //  return l.map((v) => callUserFunc(func, undefined, v));
-  //};
-  //rootEnv["forEach"] = rootEnv["map"];
+  rootEnv["map"] = [](Value env, Value l, Value rExpr) {
+    Value v;
+    auto func = evalExpr(env, rExpr);
+    for (size_t i = 0; i < l.length(); ++i) {
+      v.push(callUserFunc(func, Value{}, l[i]));
+    }
+    return v;
+  };
+  rootEnv["forEach"] = [](Value env, Value l, Value rExpr) {
+    auto func = evalExpr(env, rExpr);
+    for (size_t i = 0; i < l.length(); ++i) {
+      callUserFunc(func, Value{}, l[i]);
+    }
+    return Value{};
+  };
   rootEnv["print"] = [](Value env, Value l, Value rExpr) {
     std::cout << evalExpr(env, rExpr).toString() << std::endl;
     return Value{};
