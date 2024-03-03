@@ -14,7 +14,6 @@ struct DynamicValue {
   Body body;
   bool isMarked{};
   DynamicValue(Body&& body) { this->body = body; }
-  inline bool operator==(DynamicValue& v);
   std::string* asString() { return std::get_if<std::string>(&body); }
   Array* asArray() { return std::get_if<Array>(&body); }
   Dic* asDic() { return std::get_if<Dic>(&body); }
@@ -22,11 +21,13 @@ struct DynamicValue {
   size_t length();
   size_t push(Value v);
   Value& operator[](size_t i);
-  bool has(std::string_view s);
+  Value* find(std::string_view s);
   Value& operator[](std::string_view str);
   void mark();
   void sweep();
 };
+
+bool operator==(DynamicValue& v0, DynamicValue& v1);
 
 struct GarbageCollector {
   std::forward_list<std::weak_ptr<DynamicValue>> values;
@@ -49,43 +50,20 @@ void GarbageCollector::sweep() {
   }
 }
 
-void Value::sweep() {
-  garbageCollector.sweep();
-}
+void Value::sweep() { garbageCollector.sweep(); }
 
-Value::Value(std::string_view str) {
-  body = garbageCollector.makeShared(std::string(str));
-}
+Value::Value(const std::string& str)
+: Value(garbageCollector.makeShared(str)) {}
 
-Value::Value(std::initializer_list<Value> l) {
-  body = garbageCollector.makeShared(l);
-}
+Value::Value(std::initializer_list<Value> l)
+: Value(garbageCollector.makeShared(l)) {}
 
-Value::Value(std::initializer_list<std::pair<const std::string, Value>> l) {
-  body = garbageCollector.makeShared(l);
-}
+Value::Value(std::initializer_list<std::pair<const std::string, Value>> l)
+: Value(garbageCollector.makeShared(l)) {}
 
 Value Value::shallowCopy() {
   if (auto d = asDynamicValue()) return Value(garbageCollector.makeShared(**d));
   return *this;
-}
-
-bool Value::operator==(Value v) {
-  if (auto d0 = asDynamicValue(), d1 = v.asDynamicValue(); d0 && d1) {
-    return **d0 == **d1;
-  }
-  return body == v.body;
-}
-
-bool Value::operator<(Value v) {
-  return toNumber() < v.toNumber();
-}
-
-Value Value::operator+(Value v) {
-  if (auto n0 = asNumber(), n1 = v.asNumber(); n0 && n1) {
-    return {toNumber() + v.toNumber()};
-  }
-  return {toString() + v.toString()};
 }
 
 double Value::toNumber() {
@@ -113,8 +91,13 @@ std::string Value::toString() {
 }
 
 Value& Value::operator[](Value v) {
-  if (auto n = v.asNumber()) return (*this)[*n];
-  return (*this)[v.toString()];
+  if (auto n = v.asNumber()) {
+    int ni = int(*n);
+    if (!asDynamicValue()) body = garbageCollector.makeShared(Array(ni + 1));
+    return (**asDynamicValue())[ni];
+  }
+  if (!asDynamicValue()) body = garbageCollector.makeShared(Dic());
+  return (**asDynamicValue())[v.toString()];
 }
 
 size_t Value::length() {
@@ -127,30 +110,31 @@ size_t Value::push(Value v) {
   return (*asDynamicValue())->push(v);
 }
 
-Value& Value::operator[](size_t i) {
-  if (!asDynamicValue()) body = garbageCollector.makeShared(Array(i + 1));
-  return (**asDynamicValue())[i];
-}
-
-bool Value::has(std::string_view s) {
-  if (auto dv = asDynamicValue()) return (*dv)->has(s);
-  return false;
-}
-
-Value& Value::operator[](std::string_view s) {
-  if (!asDynamicValue()) body = garbageCollector.makeShared(Dic());
-  return (**asDynamicValue())[s];
+Value* Value::find(std::string_view s) {
+  if (auto v = asDynamicValue()) return (*v)->find(s);
+  return nullptr;
 }
 
 void Value::mark() {
   if (auto v = asDynamicValue()) (*v)->mark();
 }
 
-bool DynamicValue::operator==(DynamicValue& v) {
-  if (auto s0 = asString(), s1 = v.asString(); s0 && s1) {
-    return *s0 == *s1;
+Value operator==(Value v0, Value v1) {
+  if (auto d0 = v0.asDynamicValue(), d1 = v1.asDynamicValue(); d0 && d1) {
+    return **d0 == **d1;
   }
-  return this == &v;
+  return Value(double(v0.body == v1.body));
+}
+
+Value operator<(Value v0, Value v1) {
+  return Value(double(v0.toNumber() < v1.toNumber()));
+}
+
+Value operator+(Value v0, Value v1) {
+  if (auto n0 = v0.asNumber(), n1 = v1.asNumber(); n0 && n1) {
+    return *n0 + *n1;
+  }
+  return v0.toString() + v1.toString();
 }
 
 std::string DynamicValue::toString() {
@@ -192,9 +176,13 @@ Value& DynamicValue::operator[](size_t i) {
   return asArray()->at(i);
 }
 
-bool DynamicValue::has(std::string_view s) {
-  if (auto dic = asDic()) return dic->find(std::string(s)) != dic->end();
-  return 0;
+Value* DynamicValue::find(std::string_view s) {
+  if (auto dic = asDic()) {
+    if (auto itr = dic->find(std::string(s)); itr != dic->end()) {
+      return &itr->second;
+    }
+  }
+  return nullptr;
 }
 
 Value& DynamicValue::operator[](std::string_view str) {
@@ -216,5 +204,12 @@ void DynamicValue::mark() {
 void DynamicValue::sweep() {
   if (!isMarked) body = Array{};
   isMarked = false;
+}
+
+bool operator==(DynamicValue& v0, DynamicValue& v1) {
+  if (auto s0 = v0.asString(), s1 = v1.asString(); s0 && s1) {
+    return *s0 == *s1;
+  }
+  return &v0 == &v1;
 }
 
