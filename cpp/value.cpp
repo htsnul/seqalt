@@ -12,6 +12,7 @@ using Dic = std::unordered_map<std::string, Value>;
 struct DynamicValue {
   using Body = std::variant<std::string, Array, Dic>;
   Body body;
+  bool isMarked{};
   DynamicValue(Body&& body) { this->body = body; }
   inline bool operator==(DynamicValue& v);
   std::string* asString() { return std::get_if<std::string>(&body); }
@@ -23,6 +24,8 @@ struct DynamicValue {
   Value& operator[](size_t i);
   bool has(std::string_view s);
   Value& operator[](std::string_view str);
+  void mark();
+  void sweep();
 };
 
 struct GarbageCollector {
@@ -33,7 +36,22 @@ struct GarbageCollector {
     values.push_front(ptr);
     return ptr;
   }
+  void sweep();
 } garbageCollector;
+
+void GarbageCollector::sweep() {
+  for (auto itr = values.before_begin(); std::next(itr) != values.end();) {
+    if (auto sp = std::next(itr)->lock()) sp->sweep();
+    if (std::next(itr)->expired()) values.erase_after(itr); else itr++;
+  }
+  for (auto itr = values.before_begin(); std::next(itr) != values.end();) {
+    if (std::next(itr)->expired()) values.erase_after(itr); else itr++;
+  }
+}
+
+void Value::sweep() {
+  garbageCollector.sweep();
+}
 
 Value::Value(std::string_view str) {
   body = garbageCollector.makeShared(std::string(str));
@@ -124,6 +142,10 @@ Value& Value::operator[](std::string_view s) {
   return (**asDynamicValue())[s];
 }
 
+void Value::mark() {
+  if (auto v = asDynamicValue()) (*v)->mark();
+}
+
 bool DynamicValue::operator==(DynamicValue& v) {
   if (auto s0 = asString(), s1 = v.asString(); s0 && s1) {
     return *s0 == *s1;
@@ -178,5 +200,21 @@ bool DynamicValue::has(std::string_view s) {
 Value& DynamicValue::operator[](std::string_view str) {
   if (!asDic()) body = Dic();
   return (*asDic())[std::string(str)];
+}
+
+void DynamicValue::mark() {
+  if (isMarked) return;
+  isMarked = true;
+  if (auto array = asArray()) {
+    for (auto& e : (*array)) e.mark();
+  }
+  if (auto dic = asDic()) {
+    for (auto& [k, v] : (*dic)) v.mark();
+  }
+}
+
+void DynamicValue::sweep() {
+  if (!isMarked) body = Array{};
+  isMarked = false;
 }
 

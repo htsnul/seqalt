@@ -12,6 +12,8 @@ std::string getStdinString() {
 
 int main() {
   auto val = evalCode(getStdinString());
+  val.mark();
+  Value::sweep();
   std::cout << val.toString() << std::endl;
   return 0;
 }

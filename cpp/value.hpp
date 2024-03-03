@@ -10,6 +10,7 @@ struct Value {
   using NativeFunction = Value (*)(Value env, Value l, Value rExpr);
   using Body = std::variant<Null, double, NativeFunction, std::shared_ptr<DynamicValue>>;
   Body body;
+  static void sweep();
   static Value fromBool(bool v) { return Value(v ? 1.0 : 0.0); }
   Value() {}
   Value(Body body) { this->body = body; }
@@ -39,4 +40,5 @@ struct Value {
   Value& operator[](size_t i);
   bool has(std::string_view s);
   Value& operator[](std::string_view s);
+  void mark();
 };
