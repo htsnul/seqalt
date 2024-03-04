@@ -17,12 +17,13 @@ struct DynamicValue {
   std::string* asString() { return std::get_if<std::string>(&body); }
   Array* asArray() { return std::get_if<Array>(&body); }
   Dic* asDic() { return std::get_if<Dic>(&body); }
-  std::string toString();
+  explicit operator std::string();
   size_t length();
   size_t push(Value v);
   Value& operator[](size_t i);
   Value* find(std::string_view s);
   Value& operator[](std::string_view str);
+  std::string toJSONString();
   void mark();
   void sweep();
 };
@@ -50,31 +51,13 @@ void GarbageCollector::sweep() {
   }
 }
 
-void Value::sweep() { garbageCollector.sweep(); }
-
-Value::Value(const std::string& str)
-: Value(garbageCollector.makeShared(str)) {}
-
-Value::Value(std::initializer_list<Value> l)
-: Value(garbageCollector.makeShared(l)) {}
-
-Value::Value(std::initializer_list<std::pair<const std::string, Value>> l)
-: Value(garbageCollector.makeShared(l)) {}
+Value::Value(const std::string& str) : Value(garbageCollector.makeShared(str)) {}
+Value::Value(ArrayInitializerList l) : Value(garbageCollector.makeShared(l)) {}
+Value::Value(DicInitializerList l) : Value(garbageCollector.makeShared(l)) {}
 
 Value Value::shallowCopy() {
-  if (auto d = asDynamicValue()) return Value(garbageCollector.makeShared(**d));
+  if (auto d = asDynamicValue()) return garbageCollector.makeShared(**d);
   return *this;
-}
-
-double Value::toNumber() {
-  if (auto num = asNumber()) return *num;
-  return 0.0;
-}
-
-bool Value::toBool() {
-  if (isNull()) return false;
-  if (auto num = asNumber()) return *num != 0.0;
-  return true;
 }
 
 std::string* Value::asString() {
@@ -82,22 +65,33 @@ std::string* Value::asString() {
   return nullptr;
 }
 
-std::string Value::toString() {
+Value::operator double() {
+  if (auto num = asNumber()) return *num;
+  return 0.0;
+}
+
+Value::operator bool() {
+  if (isNull()) return false;
+  if (auto num = asNumber()) return *num != 0.0;
+  return true;
+}
+
+Value::operator std::string() {
   if (isNull()) return "null";
   if (auto n = asNumber()) return (std::ostringstream{} << *n).str();
-  if (asNativeFunction()) return "NativeFunction";
-  if (auto dv = asDynamicValue()) return (*dv)->toString();
+  if (asNativeFunc()) return "NativeFunc";
+  if (auto dv = asDynamicValue()) return std::string(**dv);
   return "";
 }
 
 Value& Value::operator[](Value v) {
   if (auto n = v.asNumber()) {
-    int ni = int(*n);
+    size_t ni = *n;
     if (!asDynamicValue()) body = garbageCollector.makeShared(Array(ni + 1));
     return (**asDynamicValue())[ni];
   }
   if (!asDynamicValue()) body = garbageCollector.makeShared(Dic());
-  return (**asDynamicValue())[v.toString()];
+  return (**asDynamicValue())[std::string(v)];
 }
 
 size_t Value::length() {
@@ -115,35 +109,38 @@ Value* Value::find(std::string_view s) {
   return nullptr;
 }
 
-void Value::mark() {
-  if (auto v = asDynamicValue()) (*v)->mark();
+std::string Value::toJSONString() {
+  if (isNull()) return "null";
+  if (auto n = asNumber()) return (std::ostringstream{} << *n).str();
+  if (asNativeFunc()) return "NativeFunc";
+  if (auto dv = asDynamicValue()) return (*dv)->toJSONString();
+  return "";
 }
 
-Value operator==(Value v0, Value v1) {
+void Value::mark() { if (auto v = asDynamicValue()) (*v)->mark(); }
+void Value::sweep() { garbageCollector.sweep(); }
+
+bool operator==(Value v0, Value v1) {
   if (auto d0 = v0.asDynamicValue(), d1 = v1.asDynamicValue(); d0 && d1) {
     return **d0 == **d1;
   }
-  return Value(double(v0.body == v1.body));
-}
-
-Value operator<(Value v0, Value v1) {
-  return Value(double(v0.toNumber() < v1.toNumber()));
+  return v0.body == v1.body;
 }
 
 Value operator+(Value v0, Value v1) {
   if (auto n0 = v0.asNumber(), n1 = v1.asNumber(); n0 && n1) {
     return *n0 + *n1;
   }
-  return v0.toString() + v1.toString();
+  return std::string(v0) + std::string(v1);
 }
 
-std::string DynamicValue::toString() {
+DynamicValue::operator std::string() {
   if (auto s = asString()) return *s;
   if (auto array = asArray()) {
     std::string s{"["};
     size_t i{0};
     for (auto& e : (*array)) {
-      s += e.toString() + (++i != (*array).size() ? "," : "");
+      s += std::string(e) + (++i != (*array).size() ? "," : "");
     }
     s += "]";
     return s;
@@ -152,7 +149,7 @@ std::string DynamicValue::toString() {
     std::string s{"{"};
     size_t i{0};
     for (auto& [k, v] : (*dic)) {
-      s += k + ":" + v.toString() + (++i != (*dic).size() ? "," : "");
+      s += k + ":" + std::string(v) + (++i != (*dic).size() ? "," : "");
     }
     s += "}";
     return s;
@@ -188,6 +185,29 @@ Value* DynamicValue::find(std::string_view s) {
 Value& DynamicValue::operator[](std::string_view str) {
   if (!asDic()) body = Dic();
   return (*asDic())[std::string(str)];
+}
+
+std::string DynamicValue::toJSONString() {
+  if (auto s = asString()) return *s;
+  if (auto array = asArray()) {
+    std::string s{"["};
+    size_t i{0};
+    for (auto& e : (*array)) {
+      s += std::string(e) + (++i != (*array).size() ? "," : "");
+    }
+    s += "]";
+    return s;
+  }
+  if (auto dic = asDic()) {
+    std::string s{"{"};
+    size_t i{0};
+    for (auto& [k, v] : (*dic)) {
+      s += k + ":" + std::string(v) + (++i != (*dic).size() ? "," : "");
+    }
+    s += "}";
+    return s;
+  }
+  return {};
 }
 
 void DynamicValue::mark() {

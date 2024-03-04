@@ -113,7 +113,7 @@ Value callUserFunc(Value func, Value l, Value r) {
 }
 
 Value callFunc(Value env, Value func, Value l, Value rExpr) {
-  if (auto nativeFunc = func.asNativeFunction()) {
+  if (auto nativeFunc = func.asNativeFunc()) {
     return (*nativeFunc)(env, l, rExpr);
   }
   return callUserFunc(func, l, evalExpr(env, rExpr));
@@ -121,11 +121,12 @@ Value callFunc(Value env, Value func, Value l, Value rExpr) {
 
 Value evalSequenceExpr(Value env, Value expr) {
   if (expr["exprs"].length() == 0) {
-    //  if (expr.exprs.length === 0) return { "[": [], "{": {} }[expr.subtype];
+    if (expr["subtype"] == "[") return Value::makeArray({});
+    if (expr["subtype"] == "{") return Value::makeDic({});
     return {};
   }
   auto val = evalExpr(env, expr["exprs"][0]);
-  if (expr["subtype"] == "["sv) val = {{val}};
+  if (expr["subtype"] == "[") val = {{val}};
   for (size_t i = 1; i < expr["exprs"].length();) {
     auto func = evalExpr(env, expr["exprs"][i++]);
     auto rExpr = (
@@ -135,7 +136,7 @@ Value evalSequenceExpr(Value env, Value expr) {
     );
     val = callFunc(env, func, val, rExpr);
   }
-  if (expr["subtype"] == "{"sv) {
+  if (expr["subtype"] == "{") {
     if (auto t = val.find("__type"); t && *t == "DicUnderConstruction") {
       val = val["body"];
     }
@@ -146,10 +147,10 @@ Value evalSequenceExpr(Value env, Value expr) {
 Value envVal(Value env, std::string_view name);
 
 Value evalExpr(Value env, Value expr) {
-  if (expr["type"] == "Sequence"sv) return evalSequenceExpr(env, expr);
-  if (expr["type"] == "Number"sv) return expr["value"];
-  if (expr["type"] == "String"sv) return expr["value"];
-  if (expr["type"] == "Symbol"sv) return envVal(env, expr["value"].toString());
+  if (expr["type"] == "Sequence") return evalSequenceExpr(env, expr);
+  if (expr["type"] == "Number") return expr["value"];
+  if (expr["type"] == "String") return expr["value"];
+  if (expr["type"] == "Symbol") return envVal(env, std::string(expr["value"]));
   return {};
 }
 
@@ -169,56 +170,56 @@ Value createRootEnv() {
   static Value* rootEnvRef{};
   rootEnvRef = &rootEnv;
   rootEnv["@"] = Value{};
-  rootEnv["//"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) { return l; });
-  rootEnv[";"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["//"] = Value::NativeFunc([](Value env, Value l, Value rExpr) { return l; });
+  rootEnv[";"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     return evalExpr(env, rExpr);
   });
-  rootEnv["+"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["+"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     return l + evalExpr(env, rExpr);
   });
-  rootEnv["-"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return Value::makeNumber(l.toNumber() - evalExpr(env, rExpr).toNumber());
+  rootEnv["-"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(double(l) - double(evalExpr(env, rExpr)));
   });
-  rootEnv["*"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return Value::makeNumber(l.toNumber() * evalExpr(env, rExpr).toNumber());
+  rootEnv["*"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(double(l) * double(evalExpr(env, rExpr)));
   });
-  rootEnv["=="] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return l == evalExpr(env, rExpr);
+  rootEnv["=="] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(l == evalExpr(env, rExpr));
   });
-  rootEnv["!="] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return l != evalExpr(env, rExpr);
+  rootEnv["!="] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(l != evalExpr(env, rExpr));
   });
-  rootEnv["<"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return l < evalExpr(env, rExpr);
+  rootEnv["<"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(l < evalExpr(env, rExpr));
   });
-  rootEnv["<="] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return l <= evalExpr(env, rExpr);
+  rootEnv["<="] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(l <= evalExpr(env, rExpr));
   });
-  rootEnv[">"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return l > evalExpr(env, rExpr);
+  rootEnv[">"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(l > evalExpr(env, rExpr));
   });
-  rootEnv[">="] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return l >= evalExpr(env, rExpr);
+  rootEnv[">="] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(l >= evalExpr(env, rExpr));
   });
-  rootEnv["var"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["var"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     auto name = evalExpr(env, rExpr);
     env[name] = Value{};
     return name;
   });
-  rootEnv["="] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["="] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     if (l.length() == 2) {
       auto obj = l[0], key = l[1];
       return obj[key] = evalExpr(env, rExpr);
     }
-    auto name = l.toString();
+    auto name = std::string(l);
     auto e = ownerEnv(env, name);
     if (e.isNull()) e = *rootEnvRef;
     return e[name] = evalExpr(env, rExpr);
   });
-  rootEnv["."] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return l[(rExpr["type"] == "Symbol"sv ? rExpr["value"] : evalExpr(env, rExpr))];
+  rootEnv["."] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return l[(rExpr["type"] == "Symbol" ? rExpr["value"] : evalExpr(env, rExpr))];
   });
-  rootEnv[","] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv[","] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     if (auto t = l.find("__type"); t && *t == "DicUnderConstruction") {
       auto v = l.shallowCopy();
       v["tmpKey"] = evalExpr(env, rExpr);
@@ -231,16 +232,16 @@ Value createRootEnv() {
     }
     return Value{l, evalExpr(env,rExpr)};
   });
-  rootEnv["&&"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return Value::makeNumber(l && evalExpr(env, rExpr));
+  rootEnv["&&"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(l && evalExpr(env, rExpr));
   });
-  rootEnv["||"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    return Value::makeNumber(l || evalExpr(env, rExpr));
+  rootEnv["||"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    return Value(l || evalExpr(env, rExpr));
   });
-  rootEnv["?"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["?"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     return Value::makeDic({{"__type", "IfThenResult"}, {"isTrue", l}, {"exprIfTrue", rExpr}});
   });
-  rootEnv[":"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv[":"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     if (auto t = l.find("__type"); t && *t == "IfThenResult") {
       return evalExpr(env, l["isTrue"] ? l["exprIfTrue"] : rExpr);
     }
@@ -258,24 +259,24 @@ Value createRootEnv() {
     }
     return Value{};
   });
-  rootEnv["=>"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["=>"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     return Value::makeDic({
       {"env", env},
       {"argNames", l.length() > 0 ? l : Value{{l}}},
       {"expr", rExpr}
     });
   });
-  rootEnv["range"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["range"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     Value v;
-    for (size_t i = 0; i < evalExpr(env, rExpr).toNumber(); ++i) {
+    for (size_t i = 0; i < size_t(evalExpr(env, rExpr)); ++i) {
       v.push({static_cast<double>(i)});
     }
     return v;
   });
-  rootEnv["length"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["length"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     return Value(double(l.length()));
   });
-  rootEnv["map"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["map"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     Value v;
     auto func = evalExpr(env, rExpr);
     for (size_t i = 0; i < l.length(); ++i) {
@@ -283,15 +284,15 @@ Value createRootEnv() {
     }
     return v;
   });
-  rootEnv["forEach"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
+  rootEnv["forEach"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
     auto func = evalExpr(env, rExpr);
     for (size_t i = 0; i < l.length(); ++i) {
       callUserFunc(func, Value{}, l[i]);
     }
     return Value{};
   });
-  rootEnv["print"] = Value::makeNativeFunction([](Value env, Value l, Value rExpr) {
-    std::cout << evalExpr(env, rExpr).toString() << std::endl;
+  rootEnv["print"] = Value::NativeFunc([](Value env, Value l, Value rExpr) {
+    std::cout << std::string(evalExpr(env, rExpr)) << std::endl;
     return Value{};
   });
   return rootEnv;
