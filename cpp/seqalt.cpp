@@ -121,8 +121,8 @@ Value callFunc(Value env, Value func, Value l, Value rExpr) {
 
 Value evalSequenceExpr(Value env, Value expr) {
   if (expr["exprs"].length() == 0) {
-    if (expr["subtype"] == "[") return Value::makeArray({});
-    if (expr["subtype"] == "{") return Value::makeDic({});
+    if (expr["subtype"] == "[") return Value::makeArray();
+    if (expr["subtype"] == "{") return Value::makeDic();
     return {};
   }
   auto val = evalExpr(env, expr["exprs"][0]);
