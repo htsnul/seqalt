@@ -14,6 +14,6 @@ int main() {
   auto val = evalCode(getStdinString());
   val.mark();
   Value::sweep();
-  std::cout << std::string(val) << std::endl;
+  std::cout << val.toJSONString() << std::endl;
   return 0;
 }

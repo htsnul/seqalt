@@ -41,14 +41,13 @@ struct GarbageCollector {
   void sweep();
 } garbageCollector;
 
-void GarbageCollector::sweep() {
-  for (auto itr = values.before_begin(); std::next(itr) != values.end();) {
-    if (auto sp = std::next(itr)->lock()) sp->sweep();
-    if (std::next(itr)->expired()) values.erase_after(itr); else itr++;
+std::string escapeString(std::string_view src) {
+  std::string dst;
+  for (auto c : src) {
+    if (c == '"') dst += '\\';
+    dst += c;
   }
-  for (auto itr = values.before_begin(); std::next(itr) != values.end();) {
-    if (std::next(itr)->expired()) values.erase_after(itr); else itr++;
-  }
+  return dst;
 }
 
 Value::Value(const std::string& str) : Value(garbageCollector.makeShared(str)) {}
@@ -77,11 +76,9 @@ Value::operator bool() {
 }
 
 Value::operator std::string() {
-  if (isNull()) return "null";
   if (auto n = asNumber()) return (std::ostringstream{} << *n).str();
-  if (asNativeFunc()) return "NativeFunc";
   if (auto dv = asDynamicValue()) return std::string(**dv);
-  return "";
+  return {};
 }
 
 Value& Value::operator[](Value v) {
@@ -112,9 +109,9 @@ Value* Value::find(std::string_view s) {
 std::string Value::toJSONString() {
   if (isNull()) return "null";
   if (auto n = asNumber()) return (std::ostringstream{} << *n).str();
-  if (asNativeFunc()) return "NativeFunc";
+  if (asNativeFunc()) return R"("NativeFunc")";
   if (auto dv = asDynamicValue()) return (*dv)->toJSONString();
-  return "";
+  return {};
 }
 
 void Value::mark() { if (auto v = asDynamicValue()) (*v)->mark(); }
@@ -136,24 +133,6 @@ Value operator+(Value v0, Value v1) {
 
 DynamicValue::operator std::string() {
   if (auto s = asString()) return *s;
-  if (auto array = asArray()) {
-    std::string s{"["};
-    size_t i{0};
-    for (auto& e : (*array)) {
-      s += std::string(e) + (++i != (*array).size() ? "," : "");
-    }
-    s += "]";
-    return s;
-  }
-  if (auto dic = asDic()) {
-    std::string s{"{"};
-    size_t i{0};
-    for (auto& [k, v] : (*dic)) {
-      s += k + ":" + std::string(v) + (++i != (*dic).size() ? "," : "");
-    }
-    s += "}";
-    return s;
-  }
   return {};
 }
 
@@ -188,24 +167,25 @@ Value& DynamicValue::operator[](std::string_view str) {
 }
 
 std::string DynamicValue::toJSONString() {
-  if (auto s = asString()) return *s;
+  if (auto s = asString()) return '"' + escapeString(*s) + '"';
   if (auto array = asArray()) {
-    std::string s{"["};
+    std::string s;
     size_t i{0};
     for (auto& e : (*array)) {
-      s += std::string(e) + (++i != (*array).size() ? "," : "");
+      s += e.toJSONString() + (++i != (*array).size() ? "," : "");
     }
-    s += "]";
-    return s;
+    return "[" + s + "]";
   }
   if (auto dic = asDic()) {
-    std::string s{"{"};
+    std::string s;
     size_t i{0};
     for (auto& [k, v] : (*dic)) {
-      s += k + ":" + std::string(v) + (++i != (*dic).size() ? "," : "");
+      s += (
+        "\"" + escapeString(k)  + "\"" + ":" + v.toJSONString() +
+        (++i != (*dic).size() ? "," : "")
+      );
     }
-    s += "}";
-    return s;
+    return "{" + s + "}";
   }
   return {};
 }
@@ -233,3 +213,12 @@ bool operator==(DynamicValue& v0, DynamicValue& v1) {
   return &v0 == &v1;
 }
 
+void GarbageCollector::sweep() {
+  for (auto itr = values.before_begin(); std::next(itr) != values.end();) {
+    if (auto sp = std::next(itr)->lock()) sp->sweep();
+    if (std::next(itr)->expired()) values.erase_after(itr); else itr++;
+  }
+  for (auto itr = values.before_begin(); std::next(itr) != values.end();) {
+    if (std::next(itr)->expired()) values.erase_after(itr); else itr++;
+  }
+}
